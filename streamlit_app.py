@@ -1,24 +1,52 @@
-# إضافة دعم PWA
+# 🚨 PPFO Math Solver - إصدار محسّن لدعم PWA
+import streamlit as st
+import sys
+import subprocess
+import pkgutil
+import os
+import time
+import json
+import math
+from fractions import Fraction
+from typing import List, Dict, Any, Optional, Tuple, Union
+
+# دعم PWA
 import streamlit.components.v1 as components
 
-# إضافة مكونات PWA
+# مكونات PWA
 components.html("""
 <script>
-// تحقق من دعم PWA
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then((reg) => console.log('SW registered'))
-            .catch((err) => console.log('SW failed'));
-    });
+// تحسين PWA
+document.addEventListener('DOMContentLoaded', function() {
+    // تحسينات لتجربة الهاتف
+    document.body.style.webkitUserSelect = 'none';
+    document.body.style.webkitTouchCallout = 'none';
+    document.body.style.overflow = 'auto';
+});
+
+// رسالة تثبيت PWA
+function showInstallPrompt() {
+    if ('serviceWorker' in navigator && 'standalone' in navigator) {
+        // عرض رسالة تثبيت
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            // التطبيق مثبت بالفعل
+        } else {
+            // عرض زر التثبيت
+            const installBtn = document.createElement('div');
+            installBtn.innerHTML = `
+                <div style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3498db; color: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; text-align: center;">
+                    <h4>📱 قم بتثبيت التطبيق!</h4>
+                    <p>انقر على ⋮ في الأعلى → "تثبيت التطبيق"</p>
+                    <button onclick="this.parentElement.parentElement.remove();" style="background: white; color: #3498db; border: none; padding: 5px 15px; border-radius: 5px; cursor: pointer;">إغلاق</button>
+                </div>
+            `;
+            document.body.appendChild(installBtn);
+        }
+    }
 }
 
-// تحسين تجربة PWA
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    // عرض زر التثبيت
-    showInstallButton();
-});
+// عرض رسالة بعد 5 ثوانٍ
+setTimeout(showInstallPrompt, 5000);
 </script>
 
 <style>
@@ -27,23 +55,164 @@ body {
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
     -webkit-user-select: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* تحسينات للهاتف */
+@media (max-width: 768px) {
+    .main-header {
+        font-size: 1.8rem !important;
+    }
+    
+    .section-header {
+        font-size: 1.2rem !important;
+    }
+    
+    .stButton>button {
+        width: 100% !important;
+        margin: 0.2rem 0 !important;
+    }
+    
+    .stTextInput>div>div>input,
+    .stTextArea>div>div>textarea {
+        font-size: 16px !important;
+    }
+    
+    .stTabs>div>div {
+        display: flex;
+        overflow-x: auto;
+    }
 }
 </style>
 """, height=0)
 
-import streamlit as st
-from sympy import parse_expr, solve, symbols, diff, integrate, limit, series, expand, factor, Matrix
-import numpy as np
+# رسالة ترحيب أثناء التثبيت
+st.set_page_config(
+    page_title="PPFO Math Solver",
+    page_icon="🧮",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://ppfo-math.com/help',
+        'Report a bug': "https://ppfo-math.com/bug-report",
+        'About': "# PPFO Mathematical Suite\nتطبيق رياضي متقدم"
+    }
+)
+
+st.title("⚙️ جاري إعداد التطبيق...")
+
+# عداد للتحديثات
+if 'setup_step' not in st.session_state:
+    st.session_state.setup_step = 0
+
+# الخطوة 1: التحقق من المكتبات الأساسية
+st.session_state.setup_step += 1
+progress_bar = st.progress(st.session_state.setup_step/5)
+status_text = st.empty()
+status_text.text(f"الخطوة {st.session_state.setup_step}/5: التحقق من المكتبات الأساسية...")
+
+# القائمة النهائية للمكتبات المطلوبة
+required_packages = [
+    "sympy==1.12.0",
+    "numpy==1.26.4", 
+    "matplotlib==3.8.4",
+    "scipy==1.13.0",
+    "pandas==2.2.2",
+    "Pillow==10.3.0",
+    "plotly==5.19.0",
+    "seaborn==0.13.2"
+]
+
+# التحقق من وجود كل مكتبة وتثبيت المفقودة
+missing_packages = []
+for package_spec in required_packages:
+    package_name = package_spec.split("==")[0]
+    status_text.text(f"التحقق من: {package_name}")
+    time.sleep(0.2)
+    
+    try:
+        pkgutil.find_loader(package_name)
+    except ImportError:
+        missing_packages.append(package_spec)
+
+# الخطوة 2: تثبيت المكتبات المفقودة
+if missing_packages:
+    st.session_state.setup_step += 1
+    progress_bar.progress(st.session_state.setup_step/5)
+    status_text.text(f"الخطوة {st.session_state.setup_step}/5: سيتم تثبيت {len(missing_packages)} مكتبات مفقودة...")
+    time.sleep(1)
+    
+    for i, package in enumerate(missing_packages):
+        package_name = package.split("==")[0]
+        status_text.text(f"جارٍ تثبيت: {package_name} ({i+1}/{len(missing_packages)})")
+        
+        try:
+            # محاولة التثبيت بطرق متعددة
+            subprocess.check_call([
+                sys.executable, 
+                "-m", "pip", "install", 
+                "--upgrade", 
+                "--quiet",
+                package
+            ])
+            status_text.text(f"✅ نجاح تثبيت: {package_name}")
+            time.sleep(0.5)
+        except Exception as e:
+            st.warning(f"⚠️ فشل تثبيت {package_name}: {str(e)}")
+            # محاولة ثانية بطريقة مختلفة
+            try:
+                subprocess.check_call([
+                    sys.executable,
+                    "-m", "pip", "install",
+                    "--ignore-installed",
+                    "--quiet",
+                    package
+                ])
+                status_text.text(f"✅ نجاح بعد المحاولة الثانية: {package_name}")
+            except Exception as e2:
+                st.error(f"❌ فشل كامل في تثبيت {package_name}: {str(e2)}")
+
+# الخطوة 3: التحقق النهائي
+st.session_state.setup_step += 1
+progress_bar.progress(st.session_state.setup_step/5)
+status_text.text(f"الخطوة {st.session_state.setup_step}/5: التحقق النهائي من التثبيت...")
+
+# التحقق من SymPy بشكل خاص (الأهم)
+try:
+    import sympy
+    status_text.text(f"✅ جميع المكتبات مثبتة بنجاح! SymPy الإصدار: {sympy.__version__}")
+except ImportError as e:
+    st.error("❌ فشل تثبيت SymPy - يرجى المحاولة يدوياً:")
+    st.code("pip install sympy==1.12.0 --upgrade --ignore-installed")
+    st.stop()
+
+# الخطوة 4: إعداد matplotlib
+st.session_state.setup_step += 1
+progress_bar.progress(st.session_state.setup_step/5)
+status_text.text(f"الخطوة {st.session_state.setup_step}/5: إعداد matplotlib...")
+
+import matplotlib
+matplotlib.use('Agg')  # مهم لـ Streamlit Cloud
 import matplotlib.pyplot as plt
-from scipy import stats
-import math
-import json
-import time
-from fractions import Fraction
-from typing import List, Dict, Any, Optional, Tuple, Union
-import sympy as sp
+
+# الخطوة 5: الانتهاء
+st.session_state.setup_step += 1
+progress_bar.progress(st.session_state.setup_step/5)
+status_text.text(f"الخطوة {st.session_state.setup_step}/5: التطبيق جاهز للتشغيل!")
+
+# إخفاء رسالة الإعداد بعد 2 ثانية
+time.sleep(2)
+
+# الآن يمكن استيراد باقي المكتبات والبدء بالتطبيق
+import numpy as np
+from sympy import parse_expr, solve, symbols, diff, integrate, limit, series, expand, factor, Matrix
 import pandas as pd
 from PIL import Image
+from scipy import stats
+
+# مسح الشاشة وإظهار التطبيق الحقيقي
+for _ in range(5):
+    st.empty()
 
 # === إعداد الصفحة ===
 st.set_page_config(
@@ -94,8 +263,53 @@ st.markdown("""
         margin: 1rem 0;
         border-radius: 0 8px 8px 0;
     }
+    
+    /* تحسينات PWA */
+    @media (max-width: 768px) {
+        .main-header {
+            font-size: 1.8rem !important;
+        }
+        
+        .section-header {
+            font-size: 1.2rem !important;
+        }
+        
+        .stButton>button {
+            width: 100% !important;
+            margin: 0.2rem 0 !important;
+        }
+        
+        .stTextInput>div>div>input,
+        .stTextArea>div>div>textarea {
+            font-size: 16px !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
+
+# === رسالة تثبيت PWA ===
+components.html("""
+<div id="install-prompt" style="display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3498db; color: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000;">
+    <div style="text-align: center;">
+        <h4>📱 قم بتثبيت التطبيق!</h4>
+        <p>انقر على ⋮ في الأعلى → "تثبيت التطبيق"</p>
+        <button onclick="document.getElementById('install-prompt').style.display='none';" 
+                style="background: white; color: #3498db; border: none; padding: 5px 15px; border-radius: 5px; cursor: pointer;">
+            إغلاق
+        </button>
+    </div>
+</div>
+
+<script>
+// عرض رسالة التثبيت بعد 5 ثوانٍ
+setTimeout(() => {
+    const prompt = document.getElementById('install-prompt');
+    if (prompt) {
+        prompt.style.display = 'block';
+    }
+}, 5000);
+</script>
+""", height=80)
 
 # === العنوان الرئيسي ===
 st.markdown('<p class="main-header">🧮 PPFO Mathematical Suite</p>', unsafe_allow_html=True)
@@ -155,15 +369,15 @@ if menu == "🏠 الصفحة الرئيسية":
         
         # زر التحميل السريع
         with st.expander("📱 تحميل التطبيق على هاتفك"):
-            st.markdown("""
-            **كيفية تثبيت التطبيق على هاتفك الأندرويد:**
+            st.markdown(f"""
+            **كيفية تثبيت التطبيق على هاتفك ({'الأندرويد' if 'Android' in st.get_option('client.userAgent') else 'iPhone'})**:
             1. افتح هذا الرابط في متصفح Chrome
-            2. انقر على أيقونة القائمة (⋮) في الأعلى
-            3. اختر "تثبيت التطبيق" أو "Install app"
+            2. انقر على أيقونة القائمة ({'⋮' if 'Android' in st.get_option('client.userAgent') else '•••'}) في الأعلى
+            3. اختر "{'تثبيت التطبيق' if 'Android' in st.get_option('client.userAgent') else 'إضافة إلى الشاشة الرئيسية'}"
             4. اتبع التعليمات لإضافة التطبيق إلى شاشتك الرئيسية
             
             **المزايا:**
-            - يعمل دون اتصال بالإنترنت
+            - يعمل دون اتصال بالإنترنت (بعد التثبيت الأولي)
             - واجهة سهلة وسريعة
             - تحديثات تلقائية
             """)
@@ -612,7 +826,7 @@ elif menu == "📐 الهندسة":
                     
                     # عرض الرسم
                     st.pyplot(fig)
-                    
+                
                     # حفظ الرسم كصورة
                     if st.button("حفظ الرسم"):
                         fig.savefig('function_plot.png', bbox_inches='tight', dpi=300)
@@ -719,7 +933,8 @@ elif menu == "📊 الإحصاء":
                     n = len(data)
                     mean = np.mean(data)
                     median = np.median(data)
-                    mode = stats.mode(data, keepdims=True)[0][0]
+                    mode_result = stats.mode(data)
+                    mode = mode_result.mode[0] if hasattr(mode_result, 'mode') and len(mode_result.mode) > 0 else "لا يوجد"
                     std_dev = np.std(data, ddof=1)
                     variance = np.var(data, ddof=1)
                     min_val = np.min(data)
@@ -737,7 +952,7 @@ elif menu == "📊 الإحصاء":
                         st.metric("الوسيط", f"{median:.{precision}f}")
                     
                     with col2:
-                        st.metric("المنوال", f"{mode:.{precision}f}")
+                        st.metric("المنوال", f"{mode:.{precision}f}" if isinstance(mode, (int, float)) else mode)
                         st.metric("الانحراف المعياري", f"{std_dev:.{precision}f}")
                         st.metric("التباين", f"{variance:.{precision}f}")
                     
