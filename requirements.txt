@@ -1,14 +1,14 @@
-# PPFO Mathematical Suite - المتطلبات الأساسية
-# تم إنشاء هذا الملف لضمان توافق جميع المكتبات على Streamlit Cloud
+# PPFO Mathematical Suite - متطلبات متوافقة مع Streamlit Cloud
+# الإصدارات مختارة بعناية لتجنب التعارضات
 
 streamlit==1.35.0
-sympy==1.12
+sympy==1.12.0
 numpy==1.26.4
 matplotlib==3.8.4
 scipy==1.13.0
 pandas==2.2.2
 Pillow==10.3.0
-
-# مكتبات إضافية مفيدة
 plotly==5.19.0
-seaborn==0.13.2streamlit
+seaborn==0.13.2
+altair==5.3.0
+pyarrow==15.0.2
