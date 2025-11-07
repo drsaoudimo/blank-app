@@ -141,7 +141,7 @@ const urlsToCache = [
   '/static/js/app.js',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png'
-]; // تم إضافة القوس المفقود هنا
+];
 
 // تثبيت Service Worker
 self.addEventListener('install', event => {
@@ -182,14 +182,13 @@ self.addEventListener('fetch', event => {
         return fetch(event.request).then(
           networkResponse => {
             // تخزين الاستجابة في الذاكرة المؤقتة
-            if (event.request.method === 'GET' && !networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-              return networkResponse;
+            if (event.request.method === 'GET' && networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME)
+                .then(cache => {
+                  cache.put(event.request, responseToCache);
+                });
             }
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME)
-              .then(cache => {
-                cache.put(event.request, responseToCache);
-              });
             return networkResponse;
           }
         );
@@ -217,109 +216,248 @@ self.addEventListener('message', event => {
 });
 """
 
-# إنشاء مكونات PWA
-pwa_manifest = generate_manifest()
-pwa_service_worker = generate_service_worker()
-
-# عرض مكونات PWA في صفحة Streamlit
-st.markdown(f"""
-<script>
-// Service Worker Registration
-if ('serviceWorker' in navigator) {{
-  window.addEventListener('load', () => {{
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(registration => {{
-        console.log('ServiceWorker registered with scope:', registration.scope);
-      }})
-      .catch(error => {{
-        console.log('ServiceWorker registration failed:', error);
-      }});
-  }});
-}}
-
-// إعداد PWA
-document.addEventListener('DOMContentLoaded', function() {{
-  // إضافة دعم التثبيت
-  let deferredPrompt;
-  window.addEventListener('beforeinstallprompt', (e) => {{
-    e.preventDefault();
-    deferredPrompt = e;
-    // إظهار زر التثبيت
-    const installBtn = document.createElement('div');
-    installBtn.id = 'install-btn-container';
-    installBtn.innerHTML = `
-      <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000; background: #3498db; color: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <span>📱</span>
-          <span>تثبيت التطبيق على هاتفك؟</span>
-          <button id="install-btn" style="background: white; color: #3498db; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-left: 10px;">
-            تثبيت
-          </button>
-          <button id="dismiss-btn" style="background: transparent; border: 1px solid white; color: white; padding: 3px 8px; border-radius: 4px; cursor: pointer;">
-            ✕
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(installBtn);
+# === الدوال الرياضية الأساسية ===
+@lru_cache(maxsize=2000)
+def is_prime_fast(n: int) -> bool:
+    """اختبار أولية سريع باستخدام خوارزميات متعددة"""
+    n = int(n)
+    if n < 2:
+        return False
+    if n in (2, 3, 5, 7, 11, 13):
+        return True
+    if n % 2 == 0:
+        return False
     
-    document.getElementById('install-btn').addEventListener('click', () => {{
-      if (deferredPrompt) {{
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then((choiceResult) => {{
-          if (choiceResult.outcome === 'accepted') {{
-            console.log('User accepted the A2HS prompt');
-          }} else {{
-            console.log('User dismissed the A2HS prompt');
-          }}
-          deferredPrompt = null;
-          document.getElementById('install-btn-container').remove();
-        }});
-      }}
-    }});
+    # استخدام gmpy2 إذا متوفر
+    if GMPY2_AVAILABLE:
+        try:
+            return bool(gmpy2.is_prime(mpz(n)))
+        except Exception:
+            pass
     
-    document.getElementById('dismiss-btn').addEventListener('click', () => {{
-      document.getElementById('install-btn-container').remove();
-    }});
-  }});
-}});
-</script>
+    # استخدام sympy إذا متوفر
+    if SYMPY_AVAILABLE:
+        try:
+            return bool(sympy.isprime(n))
+        except Exception:
+            pass
+    
+    # خوارزمية Miller-Rabin
+    d, s = n - 1, 0
+    while d % 2 == 0:
+        d //= 2
+        s += 1
+    
+    bases = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+    for a in bases:
+        if a % n == 0:
+            continue
+        x = pow(a, d, n)
+        if x == 1 or x == n - 1:
+            continue
+        for _ in range(s - 1):
+            x = (x * x) % n
+            if x == n - 1:
+                break
+        else:
+            return False
+    return True
 
-<style>
-/* تحسينات PWA */
-body {{
-  -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}}
+def simple_sieve(limit: int):
+    """غربال إراتوستينس للأعداد الصغيرة"""
+    if limit < 2:
+        return []
+    sieve = bytearray(b"\x01") * (limit + 1)
+    sieve[0:2] = b"\x00\x00"
+    for p in range(2, int(limit**0.5) + 1):
+        if sieve[p]:
+            step = p
+            start = p * p
+            sieve[start:limit+1:step] = b"\x00" * (((limit - start) // step) + 1)
+    return [i for i, v in enumerate(sieve) if v]
 
-/* تحسينات للهاتف */
-@media (max-width: 768px) {{
-  .main-header {{
-    font-size: 1.8rem !important;
-  }}
-  
-  .section-header {{
-    font-size: 1.2rem !important;
-  }}
-  
-  .stButton>button {{
-    width: 100% !important;
-    margin: 0.2rem 0 !important;
-  }}
-  
-  .stTextInput>div>div>input,
-  .stTextArea>div>div>textarea {{
-    font-size: 16px !important;
-  }}
-  
-  footer {{
-    display: none !important;
-  }}
-}}
-</style>
-""", unsafe_allow_html=True)
+def _try_limit_break(start_time, timeout):
+    """التحقق من انتهاء المهلة الزمنية"""
+    if timeout is None:
+        return False
+    return (time.time() - start_time) > timeout
+
+def brent_rho(n: int, timeout=None):
+    """خوارزمية Brent Rho للعوامل"""
+    if n % 2 == 0:
+        return 2
+    y = random.randrange(2, n-1)
+    c = random.randrange(1, n-1)
+    m = random.randrange(1, min(n-1, 100))
+    g = 1
+    r = 1
+    q = 1
+    x = 0
+    start = time.time()
+    while g == 1:
+        if timeout and (time.time() - start) > timeout:
+            return None
+        x = y
+        for _ in range(r):
+            y = (pow(y, 2, n) + c) % n
+        k = 0
+        while k < r and g == 1:
+            ys = y
+            for _ in range(min(m, r-k)):
+                y = (pow(y, 2, n) + c) % n
+                q = (q * (abs(x-y))) % n
+            g = math.gcd(q, n)
+            k += m
+        r *= 2
+    if g == n:
+        while True:
+            ys = (pow(ys, 2, n) + c) % n
+            g = math.gcd(abs(x-ys), n)
+            if g > 1:
+                break
+    return g if g != n else None
+
+def pollard_rho(n: int, timeout=None):
+    """خوارزمية Pollard Rho للعوامل"""
+    if n % 2 == 0:
+        return 2
+    if n % 3 == 0:
+        return 3
+    start = time.time()
+    while True:
+        if timeout and (time.time() - start) > timeout:
+            return None
+        x = random.randrange(2, n-1)
+        y = x
+        c = random.randrange(1, n-1)
+        d = 1
+        while d == 1:
+            x = (x*x + c) % n
+            y = (y*y + c) % n
+            y = (y*y + c) % n
+            d = math.gcd(abs(x-y), n)
+            if d == n:
+                break
+        if d > 1 and d < n:
+            return d
+
+def factorize(n: int, timeout=None, verbose=False):
+    """تحليل العدد إلى عوامله الأولية"""
+    n = int(n)
+    res = []
+    start_time = time.time()
+
+    def _factor(n_local):
+        nonlocal res
+        if timeout and (time.time() - start_time) > timeout:
+            raise TimeoutError()
+        if n_local == 1:
+            return
+        if is_prime_fast(n_local):
+            res.append(n_local)
+            return
+        
+        # اختبار القسمة على الأعداد الأولية الصغيرة
+        small_primes = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97]
+        for p in small_primes:
+            if n_local % p == 0:
+                while n_local % p == 0:
+                    res.append(p)
+                    n_local //= p
+                if n_local == 1:
+                    return
+                return _factor(n_local)
+        
+        # استخدام sympy إذا كان متوفراً
+        if SYMPY_AVAILABLE:
+            try:
+                if timeout and (time.time() - start_time) > timeout:
+                    raise TimeoutError()
+                factors = sympy.factorint(n_local)
+                for p, e in factors.items():
+                    res.extend([int(p)] * int(e))
+                return
+            except Exception:
+                pass
+        
+        # استخدام خوارزميات تحليل متقدمة
+        d = None
+        for attempt in range(6):
+            if timeout and (time.time() - start_time) > timeout:
+                raise TimeoutError()
+            d = brent_rho(n_local, timeout=max(0, (timeout - (time.time()-start_time))) if timeout else None)
+            if d is None or d == n_local:
+                d = pollard_rho(n_local, timeout=max(0, (timeout - (time.time()-start_time))) if timeout else None)
+            if d is not None and d > 1 and d < n_local:
+                _factor(d)
+                _factor(n_local//d)
+                return
+        
+        # إذا فشل كل شيء، نعتبر العدد أولياً
+        if is_prime_fast(n_local):
+            res.append(n_local)
+        else:
+            res.append(n_local)
+
+    try:
+        _factor(n)
+    except TimeoutError:
+        if verbose:
+            st.warning("⏱️ تم الوصول إلى مهلة التحليل — إرجاع العوامل الجزئية المكتشفة.")
+    return sorted(res)
+
+def riemann_correction(estimate: int, zeros=None):
+    """
+    تصحيح تذبذبي تقريبي مستوحى من الصيغة الصريحة.
+    يُرجع قيمة صحيحة تقريبية (قد تكون سالبة أو موجبة).
+    """
+    if zeros is None:
+        zeros = RIEMANN_ZEROS
+    try:
+        x = max(3, int(estimate))
+        ln_x = math.log(x)
+        s = 0.0
+        for gamma in zeros:
+            s += math.cos(gamma * ln_x) / math.sqrt(0.25 + gamma*gamma)
+        correction = (math.sqrt(x) / max(1.0, ln_x)) * (s / (2.0 * math.pi))
+        return int(round(correction))
+    except Exception:
+        return 0
+
+def prime_nth_estimate(n: int, use_riemann=False):
+    """
+    تقدير p_n باستخدام تقريب ريمان-فون مانغولت + معامل معايرة مُحسّن C(n).
+    إذا use_riemann=True فسنضيف تصحيح ريمان التخميني لكن نقيده بـ cap_fraction.
+    """
+    n = int(n)
+    if n < 6:
+        return [2,3,5,7,11][n-1]
+
+    ln_n = math.log(n)
+    ln_ln_n = math.log(ln_n)
+
+    # التقريب الأساسي من Riemann–von Mangoldt
+    base = ln_n + ln_ln_n - 1
+    if n > 100:
+        base += (ln_ln_n - 2) / ln_n
+    if n > 1000:
+        base -= EULER_GAMMA / ln_n
+
+    # معامل التصحيح المُعايَر
+    C_calibrated = _CAL_A + (_CAL_B / ln_n) + (_CAL_C / (ln_n ** 2))
+
+    estimate = int(round(n * (base + C_calibrated)))
+
+    if use_riemann:
+        # نحسب تصحيح ريمان ثم نقيده (cap) حتى نسبة صغيرة من estimate
+        corr = riemann_correction(estimate)
+        # cap fraction: 0.5% كتقييد افتراضي
+        cap_fraction = 0.005
+        cap = max(10, int(cap_fraction * estimate))
+        corr = max(-cap, min(cap, corr))
+        estimate += corr
+
+    return int(estimate)
 
 # === واجهة المستخدم ===
 st.set_page_config(
@@ -405,7 +543,6 @@ st.markdown("### تحليل رياضي متقدم للأعداد الأولية 
 
 # === الشريط الجانبي ===
 with st.sidebar:
-    st.image("https://via.placeholder.com/150x50?text=PPFO+Logo", use_column_width=True)
     st.markdown("### 📚 القوائم الرئيسية")
     
     menu = st.radio(
@@ -426,7 +563,11 @@ with st.sidebar:
         st.session_state.verbose = True
     
     st.metric("عدد التحليلات", st.session_state.analysis_count)
-    st.metric("متوسط الوقت", f"{st.session_state.total_time/(st.session_state.analysis_count or 1):.2f} ثانية")
+    if st.session_state.analysis_count > 0:
+        avg_time = st.session_state.total_time / st.session_state.analysis_count
+        st.metric("متوسط الوقت", f"{avg_time:.2f} ثانية")
+    else:
+        st.metric("متوسط الوقت", "0.00 ثانية")
     
     if st.session_state.last_analysis:
         st.markdown(f"**آخر تحليل:** {st.session_state.last_analysis}")
@@ -469,7 +610,6 @@ if menu == "🏠 الصفحة الرئيسية":
         """, unsafe_allow_html=True)
     
     with col2:
-        st.image("https://via.placeholder.com/400x300?text=Math+Visualization", use_column_width=True)
         st.markdown("### 📱 التطبيق يعمل على جميع المنصات")
         
         st.markdown("""
@@ -577,7 +717,7 @@ elif menu == "🔍 تحليل العوامل":
         for name, example in examples.items():
             if st.button(f"مثال: {name}"):
                 st.session_state.factor_input = example
-                st.experimental_rerun()
+                st.rerun()
         
         st.markdown("### ℹ️ معلومات")
         st.markdown("""
@@ -680,7 +820,7 @@ elif menu == "📊 تقدير الأعداد الأولية":
         for name, example in examples.items():
             if st.button(f"مثال: {name}"):
                 st.session_state.nth_input = example
-                st.experimental_rerun()
+                st.rerun()
         
         st.markdown("### 📐 الصيغ الرياضية")
         st.markdown("""
@@ -853,243 +993,6 @@ elif menu == "❓ المساعدة":
         if st.button("إرسال التقرير"):
             st.markdown('<div class="success-box">✅ تم إرسال التقرير بنجاح! سنقوم بمراجعته في أقرب وقت.</div>', unsafe_allow_html=True)
 
-# === الدوال الرياضية ===
-@lru_cache(maxsize=2000)
-def is_prime_fast(n: int) -> bool:
-    """اختبار أولية سريع باستخدام خوارزميات متعددة"""
-    n = int(n)
-    if n < 2:
-        return False
-    if n in (2, 3, 5, 7, 11, 13):
-        return True
-    if n % 2 == 0:
-        return False
-    
-    # استخدام gmpy2 إذا متوفر
-    if GMPY2_AVAILABLE:
-        try:
-            return bool(gmpy2.is_prime(mpz(n)))
-        except Exception:
-            pass
-    
-    # استخدام sympy إذا متوفر
-    if SYMPY_AVAILABLE:
-        try:
-            return bool(sympy.isprime(n))
-        except Exception:
-            pass
-    
-    # خوارزمية Miller-Rabin
-    d, s = n - 1, 0
-    while d % 2 == 0:
-        d //= 2
-        s += 1
-    
-    bases = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
-    for a in bases:
-        if a % n == 0:
-            continue
-        x = pow(a, d, n)
-        if x == 1 or x == n - 1:
-            continue
-        for _ in range(s - 1):
-            x = (x * x) % n
-            if x == n - 1:
-                break
-        else:
-            return False
-    return True
-
-def simple_sieve(limit: int):
-    """غربال إراتوستينس للأعداد الصغيرة"""
-    if limit < 2:
-        return []
-    sieve = bytearray(b"\x01") * (limit + 1)
-    sieve[0:2] = b"\x00\x00"
-    for p in range(2, int(limit**0.5) + 1):
-        if sieve[p]:
-            step = p
-            start = p * p
-            sieve[start:limit+1:step] = b"\x00" * (((limit - start) // step) + 1)
-    return [i for i, v in enumerate(sieve) if v]
-
-def _try_limit_break(start_time, timeout):
-    """التحقق من انتهاء المهلة الزمنية"""
-    if timeout is None:
-        return False
-    return (time.time() - start_time) > timeout
-
-def brent_rho(n: int, timeout=None):
-    """خوارزمية Brent Rho للعوامل"""
-    if n % 2 == 0:
-        return 2
-    y = random.randrange(2, n-1)
-    c = random.randrange(1, n-1)
-    m = random.randrange(1, min(n-1, 100))
-    g = 1
-    r = 1
-    q = 1
-    x = 0
-    start = time.time()
-    while g == 1:
-        if timeout and (time.time() - start) > timeout:
-            return None
-        x = y
-        for _ in range(r):
-            y = (pow(y, 2, n) + c) % n
-        k = 0
-        while k < r and g == 1:
-            ys = y
-            for _ in range(min(m, r-k)):
-                y = (pow(y, 2, n) + c) % n
-                q = (q * (abs(x-y))) % n
-            g = math.gcd(q, n)
-            k += m
-        r *= 2
-    if g == n:
-        while True:
-            ys = (pow(ys, 2, n) + c) % n
-            g = math.gcd(abs(x-ys), n)
-            if g > 1:
-                break
-    return g if g != n else None
-
-def pollard_rho(n: int, timeout=None):
-    """خوارزمية Pollard Rho للعوامل"""
-    if n % 2 == 0:
-        return 2
-    if n % 3 == 0:
-        return 3
-    start = time.time()
-    while True:
-        if timeout and (time.time() - start) > timeout:
-            return None
-        x = random.randrange(2, n-1)
-        y = x
-        c = random.randrange(1, n-1)
-        d = 1
-        while d == 1:
-            x = (x*x + c) % n
-            y = (y*y + c) % n
-            y = (y*y + c) % n
-            d = math.gcd(abs(x-y), n)
-            if d == n:
-                break
-        if d > 1 and d < n:
-            return d
-
-def factorize(n: int, timeout=None, verbose=False):
-    """تحليل العدد إلى عوامله الأولية"""
-    n = int(n)
-    res = []
-    start_time = time.time()
-
-    def _factor(n_local):
-        nonlocal res
-        if timeout and (time.time() - start_time) > timeout:
-            raise TimeoutError()
-        if n_local == 1:
-            return
-        if is_prime_fast(n_local):
-            res.append(n_local)
-            return
-        small_primes = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97]
-        for p in small_primes:
-            if n_local % p == 0:
-                while n_local % p == 0:
-                    res.append(p)
-                    n_local //= p
-                if n_local == 1:
-                    return
-                return _factor(n_local)
-        if SYMPY_AVAILABLE:
-            try:
-                if timeout and (time.time() - start_time) > timeout:
-                    raise TimeoutError()
-                fdict = sympy.factorint(n_local, multiple=False)
-                for p, e in fdict.items():
-                    res.extend([int(p)]*int(e))
-                return
-            except Exception:
-                pass
-        d = None
-        for attempt in range(6):
-            if timeout and (time.time() - start_time) > timeout:
-                raise TimeoutError()
-            d = brent_rho(n_local, timeout=max(0, (timeout - (time.time()-start_time))) if timeout else None)
-            if d is None or d == n_local:
-                d = pollard_rho(n_local, timeout=max(0, (timeout - (time.time()-start_time))) if timeout else None)
-            if d is None:
-                break
-            if d is not None and d > 1 and d < n_local:
-                _factor(d)
-                _factor(n_local//d)
-                return
-        if is_prime_fast(n_local):
-            res.append(n_local)
-        else:
-            res.append(n_local)
-
-    try:
-        _factor(n)
-    except TimeoutError:
-        if verbose:
-            st.warning("⏱️ تم الوصول إلى مهلة التحليل — إرجاع العوامل الجزئية المكتشفة.")
-    return sorted(res)
-
-def riemann_correction(estimate: int, zeros=None):
-    """
-    تصحيح تذبذبي تقريبي مستوحى من الصيغة الصريحة.
-    يُرجع قيمة صحيحة تقريبية (قد تكون سالبة أو موجبة).
-    """
-    if zeros is None:
-        zeros = RIEMANN_ZEROS
-    try:
-        x = max(3, int(estimate))
-        ln_x = math.log(x)
-        s = 0.0
-        for gamma in zeros:
-            s += math.cos(gamma * ln_x) / math.sqrt(0.25 + gamma*gamma)
-        correction = (math.sqrt(x) / max(1.0, ln_x)) * (s / (2.0 * math.pi))
-        return int(round(correction))
-    except Exception:
-        return 0
-
-def prime_nth_estimate(n: int, use_riemann=False):
-    """
-    تقدير p_n باستخدام تقريب ريمان-فون مانغولت + معامل معايرة مُحسّن C(n).
-    إذا use_riemann=True فسنضيف تصحيح ريمان التخميني لكن نقيده بـ cap_fraction.
-    """
-    n = int(n)
-    if n < 6:
-        return [2,3,5,7,11][n-1]
-
-    ln_n = math.log(n)
-    ln_ln_n = math.log(ln_n)
-
-    # التقريب الأساسي من Riemann–von Mangoldt
-    base = ln_n + ln_ln_n - 1
-    if n > 100:
-        base += (ln_ln_n - 2) / ln_n
-    if n > 1000:
-        base -= EULER_GAMMA / ln_n
-
-    # معامل التصحيح المُعايَر
-    C_calibrated = _CAL_A + (_CAL_B / ln_n) + (_CAL_C / (ln_n ** 2))
-
-    estimate = int(round(n * (base + C_calibrated)))
-
-    if use_riemann:
-        # نحسب تصحيح ريمان ثم نقيده (cap) حتى نسبة صغيرة من estimate
-        corr = riemann_correction(estimate)
-        # cap fraction: 0.5% كتقييد افتراضي
-        cap_fraction = 0.005
-        cap = max(10, int(cap_fraction * estimate))
-        corr = max(-cap, min(cap, corr))
-        estimate += corr
-
-    return int(estimate)
-
 # === تذييل الصفحة ===
 st.markdown("---")
 col1, col2 = st.columns([2, 1])
@@ -1097,15 +1000,75 @@ with col1:
     st.markdown("© 2023 PPFO Mathematical Suite. جميع الحقوق محفوظة.")
 with col2:
     st.markdown("### ⭐ قيّم التطبيق")
-    rating = st.slider("تقييمك", 1, 5, 4, key="footer_rating")
+    rating = st.slider("تقييمك", 1, 5, 4, key="footer_rating", label_visibility="collapsed")
     if rating >= 4:
         st.markdown("🌟 شكراً لثقتك! نحن نعمل باستمرار لتحسين التطبيق.")
     else:
         st.markdown("💡 نعتذر عن أي إزعاج. يرجى التواصل معنا لحل المشكلة.")
 
-# === روابط PWA ===
+# === عرض مكونات PWA ===
 st.markdown("""
 <script>
+// Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js')
+      .then(registration => {
+        console.log('ServiceWorker registered with scope:', registration.scope);
+      })
+      .catch(error => {
+        console.log('ServiceWorker registration failed:', error);
+      });
+  });
+}
+
+// إعداد PWA
+document.addEventListener('DOMContentLoaded', function() {
+  // إضافة دعم التثبيت
+  let deferredPrompt;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // إظهار زر التثبيت
+    const installBtn = document.createElement('div');
+    installBtn.id = 'install-btn-container';
+    installBtn.innerHTML = `
+      <div style="position: fixed; bottom: 20px; right: 20px; z-index: 1000; background: #3498db; color: white; padding: 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span>📱</span>
+          <span>تثبيت التطبيق على هاتفك؟</span>
+          <button id="install-btn" style="background: white; color: #3498db; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-left: 10px;">
+            تثبيت
+          </button>
+          <button id="dismiss-btn" style="background: transparent; border: 1px solid white; color: white; padding: 3px 8px; border-radius: 4px; cursor: pointer;">
+            ✕
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(installBtn);
+    
+    document.getElementById('install-btn').addEventListener('click', () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            console.log('User accepted the A2HS prompt');
+          } else {
+            console.log('User dismissed the A2HS prompt');
+          }
+          deferredPrompt = null;
+          document.getElementById('install-btn-container').remove();
+        });
+      }
+    });
+    
+    document.getElementById('dismiss-btn').addEventListener('click', () => {
+      document.getElementById('install-btn-container').remove();
+    });
+  });
+});
+
 // إضافة روابط PWA
 const link = document.createElement('link');
 link.rel = 'manifest';
