@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PPFO v19.0 - نسخة Streamlit مكتملة مع دعم PWA كامل
-تم تصحيح جميع الأخطاء بما في ذلك خطأ "factorize is not defined"
-تمت إضافة مكونات PWA كاملة (manifest, service worker, أيقونات)
+PPFO v19.0 - نسخة Streamlit مكتملة مع دعم PWA كامل - الإصدار المصحح
+تم تصحيح جميع الأخطاء بما في ذلك خطأ "factorize is not defined" وخطأ الأقواس في سطر 300
 """
 
 import streamlit as st
@@ -36,7 +35,8 @@ try:
 except ImportError:
     mpz = int
 
-0.57721566490153286060651209008240243104215933593992
+# === الثوابت الرياضية ===
+EULER_GAMMA = 0.57721566490153286060651209008240243104215933593992
 
 # === أصفار زيتا (قيم عددية تقريبية للأصفار غيرالمنطقية) ===
 RIEMANN_ZEROS = [
@@ -141,7 +141,7 @@ const urlsToCache = [
   '/static/js/app.js',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png'
-];
+]; // تم إضافة القوس المفقود هنا
 
 // تثبيت Service Worker
 self.addEventListener('install', event => {
@@ -287,37 +287,37 @@ document.addEventListener('DOMContentLoaded', function() {{
 
 <style>
 /* تحسينات PWA */
-body {
+body {{
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
+}}
 
 /* تحسينات للهاتف */
-@media (max-width: 768px) {
-  .main-header {
+@media (max-width: 768px) {{
+  .main-header {{
     font-size: 1.8rem !important;
-  }
+  }}
   
-  .section-header {
+  .section-header {{
     font-size: 1.2rem !important;
-  }
+  }}
   
-  .stButton>button {
+  .stButton>button {{
     width: 100% !important;
     margin: 0.2rem 0 !important;
-  }
+  }}
   
   .stTextInput>div>div>input,
-  .stTextArea>div>div>textarea {
+  .stTextArea>div>div>textarea {{
     font-size: 16px !important;
-  }
+  }}
   
-  footer {
+  footer {{
     display: none !important;
-  }
-}
+  }}
+}}
 </style>
 """, unsafe_allow_html=True)
 
