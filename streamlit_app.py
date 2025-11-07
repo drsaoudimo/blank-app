@@ -1,3 +1,36 @@
+# إضافة دعم PWA
+import streamlit.components.v1 as components
+
+# إضافة مكونات PWA
+components.html("""
+<script>
+// تحقق من دعم PWA
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then((reg) => console.log('SW registered'))
+            .catch((err) => console.log('SW failed'));
+    });
+}
+
+// تحسين تجربة PWA
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    // عرض زر التثبيت
+    showInstallButton();
+});
+</script>
+
+<style>
+/* تحسينات PWA */
+body {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+}
+</style>
+""", height=0)
+
 import streamlit as st
 from sympy import parse_expr, solve, symbols, diff, integrate, limit, series, expand, factor, Matrix
 import numpy as np
