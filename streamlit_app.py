@@ -1267,13 +1267,18 @@ def main():
 
 # 📝 تذييل الصفحة
     st.markdown("""
-    <div style="text-align: center; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.9rem; border-top: 1px solid #e2e8f0;">
+        <div style="text-align: center; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.9rem;">
         <p>✨ PPFO v29.1 - تطبيق رياضي متقدم يربط دالة زيتا بالأعداد الأولية</p>
         <p>الحسابات تعتمد على الصيغة الصريحة لريمان وأصفار زيتا غير التافهة</p>
         <p>© 2025 - جميع الحقوق محفوظة</p>
     </div>
-    """ 
-if st.session_state.lang == "ar" 
-else 
-"""
-    <div style="text-align: center; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.9rem
+    """ if st.session_state.lang == "ar" else """
+    <div style="text-align: center; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.9rem;">
+        <p>✨ PPFO v29.1 - Advanced mathematical application linking the Zeta function to prime numbers</p>
+        <p>Calculations rely on Riemann's explicit formula and non-trivial zeta zeros</p>
+        <p>© 2025 - All rights reserved</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
