@@ -1,4 +1,4 @@
-st.session_state.lang#!/usr/bin/env python3
+
 # -*- coding: utf-8 -*-
 """
 PPFO v29.1 Streamlit Web Application — إصدار متكامل مع تحسينات رياضية متقدمة
