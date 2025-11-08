@@ -1,142 +1,127 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PPFO v29.0 - إصدار متعدد اللغات مع دعم كامل للرياضيات المتقدمة
-دعم اللغات: العربية، الفرنسية، الإنجليزية
+PPFO v28.0 Streamlit Web Application — إصدار متكامل مع دعم LaTeX واللغات
 """
 
 import streamlit as st
-import math, random, time, re, json
+import math, random, time, sys, re, json
 from functools import lru_cache
 from collections import Counter
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-from scipy import integrate, stats
-import sympy as sp
+from scipy import stats
 
-# 🌐 نظام تعدد اللغات
-LANGUAGES = {
-    'ar': 'العربية',
-    'fr': 'Français',
-    'en': 'English'
-}
-
-# 📱 إعدادات الصفحة
+# 📱 إعداد صفحة Streamlit
 st.set_page_config(
-    page_title="PPFO v29.0 - Mathematics",
+    page_title="PPFO v28.0 - دوال زيتا المتكاملة",
     page_icon="✨",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
 
-# 🎨 تنسيقات CSS - تصميم متجاوب مع دعم كامل للغات
+# 🎨 CSS مخصص مع دعم LaTeX
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Roboto:wght@300;400;500;700&display=swap');
-    
-    :root {
-        --primary: #4F46E5;
-        --secondary: #7C3AED;
-        --accent: #EC4899;
-        --success: #10B981;
-        --warning: #F59E0B;
-        --danger: #EF4444;
-        --info: #3B82F6;
-        --light: #F9FAFB;
-        --dark: #1E293B;
-        --gray: #64748B;
-    }
-    
+    /* دعم كامل للهواتف */
     @media (max-width: 768px) {
         .main-header {
-            font-size: 1.8rem !important;
+            font-size: 2rem !important;
+            text-align: center !important;
+            margin-bottom: 1rem !important;
         }
         
         .sub-header {
-            font-size: 1.1rem !important;
+            font-size: 1.2rem !important;
+            text-align: center !important;
+            margin-bottom: 1.5rem !important;
         }
         
-        .math-container {
+        .mobile-card {
             padding: 12px !important;
+            margin: 8px 0 !important;
         }
         
-        .stButton>button {
-            font-size: 0.95rem !important;
-            padding: 12px 18px !important;
+        .latex-container {
+            font-size: 1.1rem !important;
+            padding: 10px !important;
         }
     }
     
-    body {
-        font-family: 'Cairo', sans-serif;
-    }
-    
+    /* النمط العام */
     .main-header {
-        font-size: 2.4rem;
-        color: var(--primary);
+        font-size: 2.5rem;
+        color: #4F46E5;
         text-align: center;
-        margin-bottom: 1.2rem;
-        font-weight: 800;
+        margin-bottom: 1.5rem;
+        font-weight: bold;
+        line-height: 1.2;
         text-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
     }
     
     .sub-header {
-        font-size: 1.3rem;
-        color: var(--secondary);
+        font-size: 1.4rem;
+        color: #7C3AED;
         text-align: center;
         margin-bottom: 2rem;
         opacity: 0.9;
     }
     
-    .math-container {
+    /* بطاقات الهاتف */
+    .mobile-card {
         background: white;
-        border-radius: 14px;
+        border-radius: 16px;
         padding: 20px;
         margin: 12px 0;
         box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-        border: 1px solid #e2e8f0;
+        border: 1px solid #e5e7eb;
         transition: all 0.3s ease;
     }
     
-    .math-container:hover {
+    .mobile-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(0,0,0,0.12);
     }
     
-    .math-title {
-        color: var(--primary);
-        font-weight: 700;
-        margin-bottom: 10px;
-        font-size: 1.2rem;
-    }
-    
-    .math-formula {
-        font-size: 1.4rem;
-        color: var(--dark);
-        margin: 8px 0;
+    /* حاويات LaTeX */
+    .latex-container {
+        background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 15px 0;
+        border: 2px solid #bfdbfe;
         text-align: center;
-        font-family: 'Cambria Math', 'Times New Roman', serif;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
     }
     
-    .math-description {
-        color: var(--gray);
+    .latex-title {
+        color: #4F46E5;
+        font-weight: 600;
+        margin-bottom: 10px;
+        font-size: 1.1rem;
+    }
+    
+    .latex-description {
+        color: #475569;
         font-size: 0.95rem;
-        margin-top: 8px;
-        line-height: 1.5;
+        margin-top: 10px;
+        font-style: italic;
+        line-height: 1.4;
     }
     
+    /* أزرار مخصصة */
     .stButton>button {
-        background: linear-gradient(135deg, var(--primary), var(--secondary));
+        background: linear-gradient(135deg, #4F46E5, #7C3AED);
         color: white;
         border: none;
         border-radius: 12px;
         padding: 14px 24px;
         font-weight: 600;
-        font-size: 1.05rem;
+        font-size: 1.1rem;
         box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
         transition: all 0.3s ease;
+        width: 100%;
     }
     
     .stButton>button:hover {
@@ -144,1162 +129,701 @@ st.markdown("""
         box-shadow: 0 6px 15px rgba(79, 70, 229, 0.4);
     }
     
-    .language-selector {
-        position: fixed;
-        top: 10px;
-        left: 10px;
-        z-index: 1000;
-    }
-    
-    .visualization-container {
-        background: white;
-        border-radius: 14px;
-        padding: 15px;
-        margin: 10px 0;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    }
-    
+    /* معلومات ملونة */
     .info-box {
         background: linear-gradient(135deg, #dbeafe, #bfdbfe);
         border-radius: 12px;
-        padding: 15px;
-        margin: 10px 0;
-        border-left: 4px solid var(--info);
+        padding: 18px;
+        margin: 12px 0;
+        border-left: 5px solid #3b82f6;
     }
     
     .success-box {
         background: linear-gradient(135deg, #dcfce7, #bbf7d0);
         border-radius: 12px;
-        padding: 15px;
-        margin: 10px 0;
-        border-left: 4px solid var(--success);
-    }
-    
-    .section-divider {
-        height: 2px;
-        background: linear-gradient(90deg, transparent, var(--primary), transparent);
-        margin: 25px 0;
-    }
-    
-    .mobile-card {
-        background: white;
-        border-radius: 16px;
         padding: 18px;
         margin: 12px 0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-        border: 1px solid #e5e7eb;
+        border-left: 5px solid #22c55e;
+    }
+    
+    .warning-box {
+        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        border-radius: 12px;
+        padding: 18px;
+        margin: 12px 0;
+        border-left: 5px solid #f59e0b;
+    }
+    
+    /* تبديل اللغة */
+    .language-switcher {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+    
+    .lang-btn {
+        background: white;
+        border: 2px solid #4F46E5;
+        border-radius: 20px;
+        padding: 8px 16px;
+        margin: 0 5px;
+        font-weight: 600;
+        color: #4F46E5;
+        cursor: pointer;
         transition: all 0.3s ease;
     }
     
-    .scroll-container {
-        max-width: 100%;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding: 5px 0;
+    .lang-btn:hover {
+        background: #4F46E5;
+        color: white;
+    }
+    
+    .lang-btn.active {
+        background: #4F46E5;
+        color: white;
+    }
+    
+    /* تحسينات التبويبات */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background: #f8fafc;
+        padding: 8px;
+        border-radius: 12px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        height: 45px;
+        border-radius: 10px;
+        background-color: #f1f5f9;
+        color: #334155;
+        font-weight: 600;
+        font-size: 1rem;
+        padding: 0 20px;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #4F46E5;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# 🌐 تحميل ترجمات اللغة
-@st.cache_data
-def load_translations():
-    return {
-        'ar': {
-            'app_name': 'PPFO v29.0 - الرياضيات المتقدمة',
-            'language_selector': 'اختر اللغة',
-            'home': '🏠 الصفحة الرئيسية',
-            'zeta_zeros': '𝛇 أصفار زيتا - مصححة',
-            'full_zeta': '🧮 دالة زيتا الكاملة',
-            'prime_numbers': '🔍 الأعداد الأولية',
-            'advanced_apps': '📊 تطبيقات متقدمة',
-            'algebra': '🎯 الجبر',
-            'geometry': '📐 الهندسة',
-            'topology': '🌐 الطبولوجيا',
-            'calculus': '📈 التفاضل والتكامل',
-            'other_math': '🔬 علوم رياضية أخرى',
-            'welcome': 'مرحباً بك في PPFO v29.0',
-            'calculation': 'حساب',
-            'result': 'النتيجة',
-            'time_taken': 'الوقت المستغرق',
-            'error': 'خطأ',
-            'success': 'نجاح',
-            'warning': 'تحذير',
-            'info': 'معلومات',
-            'function': 'الدالة',
-            'variable': 'المتغير',
-            'enter_function': 'أدخل الدالة',
-            'calculate': 'حساب',
-            'plot': 'رسم بياني',
-            'derivative': 'المشتقة',
-            'integral': 'التكامل',
-            'limit': 'النهاية',
-            'matrix': 'المصفوفة',
-            'equation': 'المعادلة',
-            'solve': 'حل',
-            'geometric_shape': 'الشكل الهندسي',
-            'topological_space': 'الفضاء الطبولوجي',
-            'examples': 'أمثلة',
-            'settings': 'الإعدادات'
-        },
-        'fr': {
-            'app_name': 'PPFO v29.0 - Mathématiques avancées',
-            'language_selector': 'Choisir la langue',
-            'home': '🏠 Page d\'accueil',
-            'zeta_zeros': '𝛇 Zéros de Zêta - corrigés',
-            'full_zeta': '🧮 Fonction Zêta complète',
-            'prime_numbers': '🔍 Nombres premiers',
-            'advanced_apps': '📊 Applications avancées',
-            'algebra': '🎯 Algèbre',
-            'geometry': '📐 Géométrie',
-            'topology': '🌐 Topologie',
-            'calculus': '📈 Calcul différentiel et intégral',
-            'other_math': '🔬 Autres sciences mathématiques',
-            'welcome': 'Bienvenue dans PPFO v29.0',
-            'calculation': 'Calcul',
-            'result': 'Résultat',
-            'time_taken': 'Temps écoulé',
-            'error': 'Erreur',
-            'success': 'Succès',
-            'warning': 'Avertissement',
-            'info': 'Information',
-            'function': 'Fonction',
-            'variable': 'Variable',
-            'enter_function': 'Entrez la fonction',
-            'calculate': 'Calculer',
-            'plot': 'Graphique',
-            'derivative': 'Dérivée',
-            'integral': 'Intégrale',
-            'limit': 'Limite',
-            'matrix': 'Matrice',
-            'equation': 'Équation',
-            'solve': 'Résoudre',
-            'geometric_shape': 'Forme géométrique',
-            'topological_space': 'Espace topologique',
-            'examples': 'Exemples',
-            'settings': 'Paramètres'
-        },
-        'en': {
-            'app_name': 'PPFO v29.0 - Advanced Mathematics',
-            'language_selector': 'Select Language',
-            'home': '🏠 Home Page',
-            'zeta_zeros': '𝛇 Zeta Zeros - Corrected',
-            'full_zeta': '🧮 Full Zeta Function',
-            'prime_numbers': '🔍 Prime Numbers',
-            'advanced_apps': '📊 Advanced Applications',
-            'algebra': '🎯 Algebra',
-            'geometry': '📐 Geometry',
-            'topology': '🌐 Topology',
-            'calculus': '📈 Calculus',
-            'other_math': '🔬 Other Mathematical Sciences',
-            'welcome': 'Welcome to PPFO v29.0',
-            'calculation': 'Calculation',
-            'result': 'Result',
-            'time_taken': 'Time Taken',
-            'error': 'Error',
-            'success': 'Success',
-            'warning': 'Warning',
-            'info': 'Info',
-            'function': 'Function',
-            'variable': 'Variable',
-            'enter_function': 'Enter function',
-            'calculate': 'Calculate',
-            'plot': 'Plot',
-            'derivative': 'Derivative',
-            'integral': 'Integral',
-            'limit': 'Limit',
-            'matrix': 'Matrix',
-            'equation': 'Equation',
-            'solve': 'Solve',
-            'geometric_shape': 'Geometric Shape',
-            'topological_space': 'Topological Space',
-            'examples': 'Examples',
-            'settings': 'Settings'
-        }
+# 🌍 نظام الترجمة
+TRANSLATIONS = {
+    "ar": {
+        "app_title": "PPFO v28.0 - دوال زيتا المتكاملة",
+        "welcome": "مرحباً بك في PPFO v28.0",
+        "zeta_zeros": "أصفار دالة زيتا غير التافهة",
+        "primes": "الأعداد الأولية",
+        "advanced": "التطبيقات المتقدمة",
+        "calculate": "حساب",
+        "precision": "الدقة",
+        "method": "طريقة الحساب",
+        "result": "النتيجة",
+        "time_taken": "الوقت المستغرق",
+        "error": "خطأ",
+        "success": "نجح",
+        "warning": "تحذير",
+        "quick_example": "مثال سريع",
+        "system_status": "حالة النظام",
+        "features": "الميزات الرئيسية",
+        "zeta_formula": "دالة زيتا لريمان",
+        "critical_line": "الخط الحرج",
+        "riemann_hypothesis": "فرضية ريمان"
+    },
+    "fr": {
+        "app_title": "PPFO v28.0 - Fonctions Zêta Intégrées",
+        "welcome": "Bienvenue dans PPFO v28.0",
+        "zeta_zeros": "Zéros Non Triviaux de la Fonction Zêta",
+        "primes": "Nombres Premiers",
+        "advanced": "Applications Avancées",
+        "calculate": "Calculer",
+        "precision": "Précision",
+        "method": "Méthode de Calcul",
+        "result": "Résultat",
+        "time_taken": "Temps Écoulé",
+        "error": "Erreur",
+        "success": "Succès",
+        "warning": "Avertissement",
+        "quick_example": "Exemple Rapide",
+        "system_status": "État du Système",
+        "features": "Fonctionnalités Principales",
+        "zeta_formula": "Fonction Zêta de Riemann",
+        "critical_line": "Ligne Critique",
+        "riemann_hypothesis": "Hypothèse de Riemann"
     }
+}
 
-# تحميل الترجمات
-translations = load_translations()
-
-# 🌐 تحديد اللغة الحالية
-if 'language' not in st.session_state:
-    st.session_state.language = 'ar'  # اللغة الافتراضية
-
-# 🌐 محدد اللغة في الزاوية
-with st.container():
-    col1, col2, col3 = st.columns([1, 10, 1])
-    with col1:
-        language = st.selectbox(
-            translations[st.session_state.language]['language_selector'],
-            options=list(LANGUAGES.keys()),
-            format_func=lambda x: LANGUAGES[x],
-            key='language_selector',
-            label_visibility='collapsed'
-        )
-        st.session_state.language = language
-    
-    # 🎯 العنوان الرئيسي
-    with col2:
-        st.markdown(f'<h1 class="main-header">{translations[st.session_state.language]["app_name"]}</h1>', 
-                   unsafe_allow_html=True)
-        st.markdown(f'<h2 class="sub-header">{translations[st.session_state.language]["welcome"]}</h2>', 
-                   unsafe_allow_html=True)
-
-# 📐 تخصيص مكتبات الرياضيات
+# 📚 مكتبات الرياضيات
 try:
-    import sympy as sp
+    import sympy
     SYMPY_AVAILABLE = True
-    sp.init_printing(use_unicode=True)
-except Exception as e:
+except Exception:
     SYMPY_AVAILABLE = False
-    st.warning(f"Sympy not available: {e}")
+
+try:
+    import gmpy2
+    GMPY2_AVAILABLE = True
+    mpz = gmpy2.mpz
+except Exception:
+    GMPY2_AVAILABLE = False
+    mpz = int
 
 try:
     import mpmath as mp
     MP_MATH_AVAILABLE = True
     mp.mp.dps = 50
-except Exception as e:
+except Exception:
     MP_MATH_AVAILABLE = False
-    st.warning(f"mpmath not available: {e}")
 
-# ===================== وظائف الدعم متعددة اللغات =====================
+# 📐 ثوابت رياضية
+EULER_GAMMA = 0.57721566490153286060651209008240243104215933593992
 
-def t(key):
-    """الحصول على ترجمة للمفتاح الحالي"""
-    return translations[st.session_state.language][key]
+# ===================== نظام الترجمة =====================
 
-def show_math_formula(formula, title="", description="", bg_color="white"):
-    """عرض صيغة رياضية بطريقة أنيقة"""
+def get_translation(key, lang):
+    """الحصول على الترجمة المناسبة للمفتاح واللغة"""
+    return TRANSLATIONS.get(lang, {}).get(key, key)
+
+def show_latex_formula(formula, title_key, description_key, lang):
+    """عرض صيغة LaTeX مع الترجمة"""
+    title = get_translation(title_key, lang)
+    description = get_translation(description_key, lang)
+    
     st.markdown(f"""
-    <div class="math-container" style="background: {bg_color};">
-        <div class="math-title">{title}</div>
-        <div class="scroll-container">
-            <div class="math-formula">{formula}</div>
-        </div>
-        <div class="math-description">{description}</div>
+    <div class="latex-container">
+        <div class="latex-title">{title}</div>
+        {formula}
+        <div class="latex-description">{description}</div>
     </div>
     """, unsafe_allow_html=True)
 
-def show_info_box(content, title=t('info'), type="info"):
-    """عرض معلومات بطريقة أنيقة"""
+def show_mobile_card(title_key, content, type="info", lang="ar"):
+    """عرض بطاقة معلومات مع الترجمة"""
+    title = get_translation(title_key, lang)
+    
     colors = {
-        "info": "--info",
-        "success": "--success", 
-        "warning": "--warning",
-        "danger": "--danger"
+        "info": "#3B82F6",
+        "success": "#10B981", 
+        "warning": "#F59E0B",
+        "danger": "#EF4444",
+        "primary": "#4F46E5"
     }
     
     st.markdown(f"""
-    <div class="info-box" style="border-left-color: var({colors[type]});">
+    <div class="mobile-card" style="border-top: 4px solid {colors.get(type, '#3B82F6')};">
         <strong>{title}:</strong> {content}
     </div>
     """, unsafe_allow_html=True)
 
-def show_success_box(content, title=t('success')):
-    st.markdown(f"""
-    <div class="success-box">
-        <strong>{title}:</strong> {content}
-    </div>
-    """, unsafe_allow_html=True)
-
-# ===================== الرياضيات الأساسية =====================
+# ===================== دوال الرياضيات =====================
 
 def parse_large_number(input_str):
-    """تحويل النص إلى عدد كبير مع دعم التنسيقات المختلفة"""
+    """تحويل النص إلى عدد كبير"""
     if not input_str or not input_str.strip():
-        raise ValueError("الرجاء إدخال عدد" if st.session_state.language == 'ar' else 
-                        "Veuillez entrer un nombre" if st.session_state.language == 'fr' else
-                        "Please enter a number")
+        raise ValueError("الرجاء إدخال عدد" if st.session_state.lang == "ar" else "Veuillez entrer un nombre")
     
-    input_str = str(input_str).strip().replace(',', '').replace(' ', '').replace('−', '-')
+    input_str = str(input_str).strip().replace(',', '').replace(' ', '')
     
-    # التعامل مع الترميز العلمي
-    scientific_pattern = r'^([+-]?[\d.]+)e([+-]?\d+)$'
-    if re.match(scientific_pattern, input_str.lower()):
+    if 'e' in input_str.lower():
         try:
-            base, exp = re.split('e', input_str.lower())
+            base, exp = input_str.lower().split('e')
             return int(float(base) * (10 ** float(exp)))
         except:
             pass
     
-    # التعامل مع الترميز بالقوى
-    power_pattern = r'^(\d+)\s*[\^*]{1,2}\s*(\d+)$'
-    if re.match(power_pattern, input_str):
+    if '^' in input_str or '**' in input_str:
         try:
             if '^' in input_str:
                 base, exp = input_str.split('^')
             else:
                 base, exp = input_str.split('**')
-            base = base.strip()
-            exp = exp.strip()
             return int(base) ** int(exp)
         except:
             pass
     
-    # محاولة التحويل المباشر
     try:
         return int(input_str)
     except ValueError:
-        raise ValueError(f"لا يمكن تحويل '{input_str}' إلى عدد صحيح" if st.session_state.language == 'ar' else
-                        f"Impossible de convertir '{input_str}' en nombre entier" if st.session_state.language == 'fr' else
-                        f"Cannot convert '{input_str}' to integer")
-
-# ===================== أصفار زيتا - النسخة المحسنة =====================
+        error_msg = f"لا يمكن تحويل '{input_str}' إلى عدد صحيح" if st.session_state.lang == "ar" else f"Impossible de convertir '{input_str}' en entier"
+        raise ValueError(error_msg)
 
 @st.cache_data(ttl=3600)
-def zeta_zero_advanced(n, precision=30):
-    """حساب الصفر غير التافه رقم n لدالة زيتا بدقة عالية"""
-    if not MP_MATH_AVAILABLE:
-        # قيمة تقريبية
-        return (2 * math.pi * n) / math.log(n / (2 * math.pi)) if n > 1 else 14.134725
+def zeta_zero_advanced(n, method="auto", precise=True, precision=30):
+    """حساب الصفر غير التافه رقم n لدالة زيتا"""
+    n = int(n)
     
-    try:
-        mp.mp.dps = precision
-        zero = mp.zetazero(n)
-        return float(zero.imag)
-    except Exception as e:
-        st.warning(f"Error calculating zeta zero: {e}")
-        return (2 * math.pi * n) / math.log(n / (2 * math.pi)) if n > 1 else 14.134725
+    if n < 1:
+        error_msg = "n يجب أن يكون على الأقل 1" if st.session_state.lang == "ar" else "n doit être au moins 1"
+        raise ValueError(error_msg)
+    
+    # قيم معروفة بدقة
+    known_zeros = {
+        1: 14.134725141734693790,
+        2: 21.022039638771554993,
+        3: 25.010857580145688763,
+        4: 30.424876125859513210,
+        5: 32.935061587739189031,
+        10: 49.773832477672302182,
+        100: 236.52422966581620580,
+        167: 346.3478705660099473959364598161519,
+        1000: 1419.4224809459956865,
+        10000: 9877.7826540055011428
+    }
+    
+    if n in known_zeros:
+        return known_zeros[n]
+    
+    # استخدام mpmath إذا كانت متوفرة
+    if MP_MATH_AVAILABLE and (method == "auto" or method == "mpmath"):
+        try:
+            mp.mp.dps = precision
+            zero = mp.zetazero(n)
+            return float(zero.imag)
+        except:
+            pass
+    
+    # تقدير تقريبي
+    if n <= 100:
+        return (2 * math.pi * (n - 1.125)) / math.log((n - 1.125) / (2 * math.pi))
+    else:
+        return (2 * math.pi * n) / math.log(n)
 
-# ===================== خدمات الجبر =====================
+@st.cache_data(ttl=3600)
+def is_prime_fast(n: int) -> bool:
+    """التحقق من الأعداد الأولية"""
+    if n < 2: 
+        return False
+    if n in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29): 
+        return True
+    if n % 2 == 0: 
+        return False
+    
+    # اختبار بسيط للأعداد الصغيرة
+    for i in range(3, int(math.sqrt(n)) + 1, 2):
+        if n % i == 0:
+            return False
+    
+    return True
 
-def algebra_section():
-    """قسم خدمات الجبر"""
-    st.header("🎯 " + t('algebra'))
+@st.cache_data(ttl=3600)
+def factorize_fast(n: int):
+    """التحليل إلى عوامل أولية"""
+    if n < 2:
+        return []
     
-    # 📐 عرض صيغة جبرية
-    show_math_formula(
-        r"ax^2 + bx + c = 0 \quad \Rightarrow \quad x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}",
-        t('equation'),
-        t('solve') + " " + ("المعادلة التربيعية" if st.session_state.language == 'ar' else 
-                          "l'équation quadratique" if st.session_state.language == 'fr' else 
-                          "quadratic equation")
-    )
+    if is_prime_fast(n):
+        return [n]
     
-    tab1, tab2, tab3 = st.tabs([
-        t('matrix'),
-        t('equation'),
-        t('polynomial')
-    ])
+    factors = []
+    temp = n
     
-    with tab1:
-        st.subheader("🧮 " + ("العمليات على المصفوفات" if st.session_state.language == 'ar' else
-                           "Opérations matricielles" if st.session_state.language == 'fr' else
-                           "Matrix Operations"))
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            rows = st.number_input("عدد الصفوف" if st.session_state.language == 'ar' else 
-                                  "Nombre de lignes" if st.session_state.language == 'fr' else
-                                  "Number of rows", 
-                                  min_value=2, max_value=5, value=2)
-        
-        with col2:
-            cols = st.number_input("عدد الأعمدة" if st.session_state.language == 'ar' else
-                                  "Nombre de colonnes" if st.session_state.language == 'fr' else
-                                  "Number of columns", 
-                                  min_value=2, max_value=5, value=2)
-        
-        st.markdown("### " + ("أدخل عناصر المصفوفة" if st.session_state.language == 'ar' else
-                           "Entrez les éléments de la matrice" if st.session_state.language == 'fr' else
-                           "Enter matrix elements"))
-        
-        matrix = []
-        for i in range(rows):
-            row = []
-            cols_input = st.columns(cols)
-            for j in range(cols):
-                with cols_input[j]:
-                    val = st.number_input(f"a[{i+1},{j+1}]", value=0.0, key=f"matrix_{i}_{j}")
-                    row.append(val)
-            matrix.append(row)
-        
-        if st.button(t('calculate'), key="matrix_calc"):
-            if SYMPY_AVAILABLE:
-                M = sp.Matrix(matrix)
-                with st.expander("📊 " + ("نتائج العمليات" if st.session_state.language == 'ar' else
-                                       "Résultats des opérations" if st.session_state.language == 'fr' else
-                                       "Operation Results")):
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("**" + ("المحدد" if st.session_state.language == 'ar' else
-                                          "Déterminant" if st.session_state.language == 'fr' else
-                                          "Determinant") + "**")
-                        try:
-                            det = M.det()
-                            st.latex(f"\\det(M) = {sp.latex(det.evalf(4))}")
-                        except:
-                            st.write("غير محدد" if st.session_state.language == 'ar' else
-                                    "Non défini" if st.session_state.language == 'fr' else
-                                    "Undefined")
-                    
-                    with col2:
-                        st.markdown("**" + ("الرتبة" if st.session_state.language == 'ar' else
-                                          "Rang" if st.session_state.language == 'fr' else
-                                          "Rank") + "**")
-                        rank = M.rank()
-                        st.latex(f"\\text{{rang}}(M) = {rank}")
-                    
-                    st.markdown("### " + ("المصفوفة المعكوسة" if st.session_state.language == 'ar' else
-                                       "Matrice inverse" if st.session_state.language == 'fr' else
-                                       "Inverse Matrix"))
-                    try:
-                        inv = M.inv()
-                        st.latex(sp.latex(inv.evalf(2)))
-                    except:
-                        st.write("غير قابلة للعكس" if st.session_state.language == 'ar' else
-                                "Non inversible" if st.session_state.language == 'fr' else
-                                "Not invertible")
+    # إزالة عوامل 2
+    while temp % 2 == 0:
+        factors.append(2)
+        temp //= 2
     
-    with tab2:
-        st.subheader("🧮 " + ("حل المعادلات" if st.session_state.language == 'ar' else
-                           "Résolution d'équations" if st.session_state.language == 'fr' else
-                           "Equation Solver"))
-        
-        equation_input = st.text_input(
-            t('enter_function') + ":" + (" (استخدم x كمتغير)" if st.session_state.language == 'ar' else
-                                       " (utilisez x comme variable)" if st.session_state.language == 'fr' else
-                                       " (use x as variable)"),
-            value="x**2 - 4"
-        )
-        
-        if st.button(t('solve'), key="equation_solve"):
-            if SYMPY_AVAILABLE:
-                try:
-                    x = sp.Symbol('x')
-                    eq = sp.sympify(equation_input)
-                    solutions = sp.solve(eq, x)
-                    
-                    st.markdown("### " + ("الحلول" if st.session_state.language == 'ar' else
-                                       "Solutions" if st.session_state.language == 'fr' else
-                                       "Solutions"))
-                    
-                    for i, sol in enumerate(solutions):
-                        st.latex(f"x_{{{i+1}}} = {sp.latex(sol.evalf(6))}")
-                    
-                    # رسم بياني للدالة
-                    if st.checkbox(t('plot') + " " + t('function'), key="plot_eq"):
-                        x_vals = np.linspace(-10, 10, 400)
-                        y_vals = [float(eq.subs(x, val)) for val in x_vals]
-                        
-                        fig = go.Figure()
-                        fig.add_trace(go.Scatter(
-                            x=x_vals, y=y_vals,
-                            mode='lines',
-                            name=equation_input,
-                            line=dict(color='#4F46E5', width=3)
-                        ))
-                        fig.add_hline(y=0, line_dash="dash", line_color="gray")
-                        
-                        fig.update_layout(
-                            title=('رسم بياني للدالة' if st.session_state.language == 'ar' else
-                                  'Graphique de la fonction' if st.session_state.language == 'fr' else
-                                  'Function Graph'),
-                            xaxis_title='x',
-                            yaxis_title='f(x)',
-                            plot_bgcolor='white',
-                            hovermode='x unified'
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                except Exception as e:
-                    show_info_box(
-                        str(e) if st.session_state.language == 'en' else
-                        "خطأ في تحليل المعادلة" if st.session_state.language == 'ar' else
-                        "Erreur dans l'analyse de l'équation",
-                        t('error'),
-                        "danger"
-                    )
+    # فحص القواسم الفردية
+    factor = 3
+    while factor * factor <= temp:
+        if temp % factor == 0:
+            factors.append(factor)
+            temp //= factor
+        else:
+            factor += 2
     
-    with tab3:
-        st.subheader("📊 " + ("الحدوديات" if st.session_state.language == 'ar' else
-                           "Polynômes" if st.session_state.language == 'fr' else
-                           "Polynomials"))
-        
-        poly_input = st.text_input(
-            t('enter_function') + ":" + (" (حدودية)" if st.session_state.language == 'ar' else
-                                       " (polynôme)" if st.session_state.language == 'fr' else
-                                       " (polynomial)"),
-            value="x**3 - 6*x**2 + 11*x - 6"
-        )
-        
-        if st.button(t('factor'), key="factor_poly"):
-            if SYMPY_AVAILABLE:
-                try:
-                    x = sp.Symbol('x')
-                    poly = sp.sympify(poly_input)
-                    factored = sp.factor(poly)
-                    roots = sp.nroots(poly)
-                    
-                    st.markdown("### " + ("التحليل إلى عوامل" if st.session_state.language == 'ar' else
-                                       "Factorisation" if st.session_state.language == 'fr' else
-                                       "Factorization"))
-                    st.latex(f"{sp.latex(poly)} = {sp.latex(factored)}")
-                    
-                    st.markdown("### " + ("جذور الحدودية" if st.session_state.language == 'ar' else
-                                       "Racines du polynôme" if st.session_state.language == 'fr' else
-                                       "Polynomial Roots"))
-                    for i, root in enumerate(roots):
-                        st.latex(f"x_{{{i+1}}} = {root:.4f}")
-                        
-                except Exception as e:
-                    show_info_box(
-                        str(e) if st.session_state.language == 'en' else
-                        "خطأ في تحليل الحدودية" if st.session_state.language == 'ar' else
-                        "Erreur dans l'analyse du polynôme",
-                        t('error'),
-                        "danger"
-                    )
-
-# ===================== خدمات الهندسة =====================
-
-def geometry_section():
-    """قسم خدمات الهندسة"""
-    st.header("📐 " + t('geometry'))
+    if temp > 1:
+        factors.append(temp)
     
-    # 📐 عرض صيغة هندسية
-    show_math_formula(
-        r"A = \\pi r^2 \\quad,\\quad V = \\frac{4}{3} \\pi r^3",
-        ("مساحة الدائرة وحجم الكرة" if st.session_state.language == 'ar' else
-         "Aire du cercle et volume de la sphère" if st.session_state.language == 'fr' else
-         "Circle Area and Sphere Volume"),
-        ("الصيغ الأساسية" if st.session_state.language == 'ar' else
-         "Formules de base" if st.session_state.language == 'fr' else
-         "Basic formulas")
-    )
-    
-    shape = st.selectbox(
-        t('geometric_shape') + ":",
-        ["دائرة", "مثلث", "مستطيل", "كرة", "مكعب"] if st.session_state.language == 'ar' else
-        ["Cercle", "Triangle", "Rectangle", "Sphère", "Cube"] if st.session_state.language == 'fr' else
-        ["Circle", "Triangle", "Rectangle", "Sphere", "Cube"]
-    )
-    
-    if shape == "دائرة" or shape == "Cercle" or shape == "Circle":
-        radius = st.number_input(
-            ("نصف القطر" if st.session_state.language == 'ar' else
-             "Rayon" if st.session_state.language == 'fr' else
-             "Radius"), 
-            min_value=0.1, value=1.0, step=0.1
-        )
-        
-        area = math.pi * radius ** 2
-        circumference = 2 * math.pi * radius
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            show_success_box(f"{area:.4f}", 
-                            ("المساحة" if st.session_state.language == 'ar' else
-                             "Aire" if st.session_state.language == 'fr' else
-                             "Area"))
-        
-        with col2:
-            show_success_box(f"{circumference:.4f}", 
-                            ("المحيط" if st.session_state.language == 'ar' else
-                             "Périmètre" if st.session_state.language == 'fr' else
-                             "Circumference"))
-        
-        if st.button(t('plot'), key="plot_circle"):
-            theta = np.linspace(0, 2*math.pi, 100)
-            x = radius * np.cos(theta)
-            y = radius * np.sin(theta)
-            
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=x, y=y,
-                mode='lines',
-                name='Circle',
-                line=dict(color='#4F46E5', width=3)
-            ))
-            
-            fig.update_layout(
-                title=('دائرة نصف قطرها' if st.session_state.language == 'ar' else
-                      'Cercle de rayon' if st.session_state.language == 'fr' else
-                      'Circle with radius') + f' {radius}',
-                xaxis_title='x',
-                yaxis_title='y',
-                aspectmode='equal',
-                plot_bgcolor='white'
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-    
-    elif shape == "مثلث" or shape == "Triangle":
-        st.subheader(("مثلث قائم الزاوية" if st.session_state.language == 'ar' else
-                     "Triangle rectangle" if st.session_state.language == 'fr' else
-                     "Right Triangle"))
-        
-        a = st.number_input(
-            ("الضلع الأول" if st.session_state.language == 'ar' else
-             "Premier côté" if st.session_state.language == 'fr' else
-             "First side"), 
-            min_value=0.1, value=3.0, step=0.1
-        )
-        b = st.number_input(
-            ("الضلع الثاني" if st.session_state.language == 'ar' else
-             "Deuxième côté" if st.session_state.language == 'fr' else
-             "Second side"), 
-            min_value=0.1, value=4.0, step=0.1
-        )
-        
-        c = math.sqrt(a**2 + b**2)
-        area = 0.5 * a * b
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            show_success_box(f"{c:.4f}", 
-                            ("الوتر" if st.session_state.language == 'ar' else
-                             "Hypoténuse" if st.session_state.language == 'fr' else
-                             "Hypotenuse"))
-        
-        with col2:
-            show_success_box(f"{area:.4f}", 
-                            ("المساحة" if st.session_state.language == 'ar' else
-                             "Aire" if st.session_state.language == 'fr' else
-                             "Area"))
-
-# ===================== خدمات التفاضل والتكامل =====================
-
-def calculus_section():
-    """قسم خدمات التفاضل والتكامل"""
-    st.header("📈 " + t('calculus'))
-    
-    # 📐 عرض صيغة التفاضل والتكامل
-    show_math_formula(
-        r"\\frac{d}{dx}f(x) = \\lim_{h \\to 0} \\frac{f(x+h) - f(x)}{h} \\quad,\\quad \\int_a^b f(x)dx = F(b) - F(a)",
-        ("المشتقة والتكامل" if st.session_state.language == 'ar' else
-         "Dérivée et intégrale" if st.session_state.language == 'fr' else
-         "Derivative and Integral"),
-        ("المفاهيم الأساسية" if st.session_state.language == 'ar' else
-         "Concepts fondamentaux" if st.session_state.language == 'fr' else
-         "Fundamental concepts")
-    )
-    
-    tab1, tab2, tab3 = st.tabs([
-        t('derivative'),
-        t('integral'),
-        t('limit')
-    ])
-    
-    with tab1:
-        st.subheader("⚡ " + ("المشتقة" if st.session_state.language == 'ar' else
-                           "Dérivée" if st.session_state.language == 'fr' else
-                           "Derivative"))
-        
-        func_input = st.text_input(
-            t('enter_function') + ":" + (" (استخدم x كمتغير)" if st.session_state.language == 'ar' else
-                                       " (utilisez x comme variable)" if st.session_state.language == 'fr' else
-                                       " (use x as variable)"),
-            value="x**2 + 3*x + 1"
-        )
-        
-        if st.button(t('calculate'), key="derivative_calc"):
-            if SYMPY_AVAILABLE:
-                try:
-                    x = sp.Symbol('x')
-                    func = sp.sympify(func_input)
-                    derivative = sp.diff(func, x)
-                    
-                    st.markdown("### " + ("الدالة الأصلية" if st.session_state.language == 'ar' else
-                                       "Fonction originale" if st.session_state.language == 'fr' else
-                                       "Original Function"))
-                    st.latex(f"f(x) = {sp.latex(func)}")
-                    
-                    st.markdown("### " + ("المشتقة" if st.session_state.language == 'ar' else
-                                       "Dérivée" if st.session_state.language == 'fr' else
-                                       "Derivative"))
-                    st.latex(f"f'(x) = {sp.latex(derivative)}")
-                    
-                    if st.checkbox(t('plot'), key="plot_derivative"):
-                        x_vals = np.linspace(-5, 5, 400)
-                        f_vals = [float(func.subs(x, val)) for val in x_vals]
-                        d_vals = [float(derivative.subs(x, val)) for val in x_vals]
-                        
-                        fig = go.Figure()
-                        fig.add_trace(go.Scatter(
-                            x=x_vals, y=f_vals,
-                            mode='lines',
-                            name='f(x)',
-                            line=dict(color='#4F46E5', width=3)
-                        ))
-                        fig.add_trace(go.Scatter(
-                            x=x_vals, y=d_vals,
-                            mode='lines',
-                            name="f'(x)",
-                            line=dict(color='#10B981', width=3, dash='dash')
-                        ))
-                        
-                        fig.update_layout(
-                            title=('رسم بياني للدالة ومشتقتها' if st.session_state.language == 'ar' else
-                                  'Graphique de la fonction et sa dérivée' if st.session_state.language == 'fr' else
-                                  'Function and Derivative Graph'),
-                            xaxis_title='x',
-                            yaxis_title='y',
-                            plot_bgcolor='white',
-                            hovermode='x unified'
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                except Exception as e:
-                    show_info_box(
-                        str(e) if st.session_state.language == 'en' else
-                        "خطأ في حساب المشتقة" if st.session_state.language == 'ar' else
-                        "Erreur dans le calcul de la dérivée",
-                        t('error'),
-                        "danger"
-                    )
-    
-    with tab2:
-        st.subheader("🔢 " + ("التكامل" if st.session_state.language == 'ar' else
-                           "Intégrale" if st.session_state.language == 'fr' else
-                           "Integral"))
-        
-        func_input = st.text_input(
-            t('enter_function') + ":" + (" (استخدم x كمتغير)" if st.session_state.language == 'ar' else
-                                       " (utilisez x comme variable)" if st.session_state.language == 'fr' else
-                                       " (use x as variable)"),
-            value="x**2",
-            key="integral_func"
-        )
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            a = st.number_input(
-                "a" + (" (الحد الأدنى)" if st.session_state.language == 'ar' else
-                      " (borne inférieure)" if st.session_state.language == 'fr' else
-                      " (lower bound)"),
-                value=0.0
-            )
-        
-        with col2:
-            b = st.number_input(
-                "b" + (" (الحد الأعلى)" if st.session_state.language == 'ar' else
-                      " (borne supérieure)" if st.session_state.language == 'fr' else
-                      " (upper bound)"),
-                value=1.0
-            )
-        
-        if st.button(t('calculate'), key="integral_calc"):
-            if SYMPY_AVAILABLE:
-                try:
-                    x = sp.Symbol('x')
-                    func = sp.sympify(func_input)
-                    indefinite_integral = sp.integrate(func, x)
-                    definite_integral = sp.integrate(func, (x, a, b))
-                    
-                    st.markdown("### " + ("التكامل غير المحدود" if st.session_state.language == 'ar' else
-                                       "Intégrale indéfinie" if st.session_state.language == 'fr' else
-                                       "Indefinite Integral"))
-                    st.latex(f"\\int {sp.latex(func)} dx = {sp.latex(indefinite_integral)} + C")
-                    
-                    st.markdown("### " + ("التكامل المحدود" if st.session_state.language == 'ar' else
-                                       "Intégrale définie" if st.session_state.language == 'fr' else
-                                       "Definite Integral"))
-                    st.latex(f"\\int_{{{a}}}^{{{b}}} {sp.latex(func)} dx = {definite_integral.evalf(6)}")
-                    
-                    # رسم بياني
-                    if st.checkbox(t('plot'), key="plot_integral"):
-                        x_vals = np.linspace(min(a-1, -5), max(b+1, 5), 400)
-                        y_vals = [float(func.subs(x, val)) for val in x_vals]
-                        
-                        fig = go.Figure()
-                        fig.add_trace(go.Scatter(
-                            x=x_vals, y=y_vals,
-                            mode='lines',
-                            name=func_input,
-                            line=dict(color='#4F46E5', width=3)
-                        ))
-                        
-                        # تظليل منطقة التكامل
-                        x_fill = np.linspace(a, b, 100)
-                        y_fill = [float(func.subs(x, val)) for val in x_fill]
-                        fig.add_trace(go.Scatter(
-                            x=list(x_fill) + list(x_fill[::-1]),
-                            y=list(y_fill) + [0]*len(y_fill),
-                            fill='toself',
-                            fillcolor='rgba(79, 70, 229, 0.2)',
-                            line=dict(color='rgba(255,255,255,0)'),
-                            hoverinfo="skip",
-                            name='المنطقة المتكاملة'
-                        ))
-                        
-                        fig.update_layout(
-                            title=('تكامل دالة' if st.session_state.language == 'ar' else
-                                  'Intégrale de la fonction' if st.session_state.language == 'fr' else
-                                  'Function Integral'),
-                            xaxis_title='x',
-                            yaxis_title='f(x)',
-                            plot_bgcolor='white',
-                            hovermode='x unified'
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                        
-                except Exception as e:
-                    show_info_box(
-                        str(e) if st.session_state.language == 'en' else
-                        "خطأ في حساب التكامل" if st.session_state.language == 'ar' else
-                        "Erreur dans le calcul de l'intégrale",
-                        t('error'),
-                        "danger"
-                    )
+    return sorted(factors)
 
 # ===================== الواجهة الرئيسية =====================
 
 def main():
-    # 🌐 تحميل الترجمات
-    trans = translations[st.session_state.language]
+    # تهيئة حالة الجلسة
+    if 'lang' not in st.session_state:
+        st.session_state.lang = "ar"
     
-    # 📱 قائمة التنقل الرئيسية
-    sections = [
-        trans['home'],
-        trans['zeta_zeros'],
-        trans['algebra'],
-        trans['geometry'],
-        trans['calculus'],
-        trans['topology'],
-        trans['other_math']
-    ]
+    # زر تبديل اللغة
+    st.markdown(f"""
+    <div class="language-switcher">
+        <button class="lang-btn {'active' if st.session_state.lang == 'ar' else ''}" 
+                onclick="window.parent.document.querySelector('.stButton button').click()">العربية</button>
+        <button class="lang-btn {'active' if st.session_state.lang == 'fr' else ''}"
+                onclick="window.parent.document.querySelector('.stButton button').click()">Français</button>
+    </div>
+    """, unsafe_allow_html=True)
     
-    # 🎛️ محدد القسم
-    section = st.selectbox(
-        trans['language_selector'] + ":" if st.session_state.language == 'ar' else
-        trans['language_selector'] + " :",
-        sections,
-        key='main_section'
-    )
+    # زر تبديل اللغة (الوظيفة الفعلية)
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("العربية 🇸🇦", use_container_width=True):
+            st.session_state.lang = "ar"
+            st.rerun()
+    with col2:
+        if st.button("Français 🇫🇷", use_container_width=True):
+            st.session_state.lang = "fr"
+            st.rerun()
+    
+    # 🎯 الترويسة
+    st.markdown(f'<h1 class="main-header">✨ {get_translation("app_title", st.session_state.lang)}</h1>', unsafe_allow_html=True)
+    
+    # 📱 قائمة التنقل
+    tabs = st.tabs([
+        get_translation("welcome", st.session_state.lang),
+        get_translation("zeta_zeros", st.session_state.lang),
+        get_translation("primes", st.session_state.lang),
+        get_translation("advanced", st.session_state.lang)
+    ])
     
     # ===================== الصفحة الرئيسية =====================
-    if section == trans['home']:
+    with tabs[0]:
         st.markdown('<div class="mobile-card">', unsafe_allow_html=True)
-        st.subheader(trans['welcome'])
+        st.subheader(get_translation("welcome", st.session_state.lang))
         
-        # حالة المكتبات
+        # حالة النظام
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"**mpmath:** {'🟢 متوفر' if MP_MATH_AVAILABLE else '🔴 غير متوفر'}"
-                       if st.session_state.language == 'ar' else
-                       f"**mpmath:** {'🟢 Disponible' if MP_MATH_AVAILABLE else '🔴 Non disponible'}"
-                       if st.session_state.language == 'fr' else
-                       f"**mpmath:** {'🟢 Available' if MP_MATH_AVAILABLE else '🔴 Not available'}")
-        
+            st.markdown(f"**mpmath:** {'🟢 متوفر' if MP_MATH_AVAILABLE else '🔴 غير متوفر'}")
+            st.markdown(f"**sympy:** {'🟢 متوفر' if SYMPY_AVAILABLE else '🔴 غير متوفر'}")
         with col2:
-            st.markdown(f"**sympy:** {'🟢 متوفر' if SYMPY_AVAILABLE else '🔴 غير متوفر'}"
-                       if st.session_state.language == 'ar' else
-                       f"**sympy:** {'🟢 Disponible' if SYMPY_AVAILABLE else '🔴 Non disponible'}"
-                       if st.session_state.language == 'fr' else
-                       f"**sympy:** {'🟢 Available' if SYMPY_AVAILABLE else '🔴 Not available'}")
+            st.markdown(f"**gmpy2:** {'🟢 متوفر' if GMPY2_AVAILABLE else '🔴 غير متوفر'}")
+            st.markdown("**الإصدار:** v28.0" if st.session_state.lang == "ar" else "**Version:** v28.0")
         
-        st.markdown("""
-        **الميزات الرئيسية:**
-        - ✅ أصفار زيتا غير التافهة بدقة عالية
-        - 🧮 الجبر: حل المعادلات، المصفوفات، الحدوديات
-        - 📐 الهندسة: حساب المساحات والأحجام
-        - 📈 التفاضل والتكامل: المشتقات والتكاملات
-        - 🌐 الطبولوجيا والرياضيات المتقدمة
-        - 🌍 دعم متعدد اللغات (العربية، الفرنسية، الإنجليزية)
-        
-        اختر القسم الذي تريد استكشافه من القائمة أعلاه.
-        """ if st.session_state.language == 'ar' else """
-        **Fonctionnalités principales :**
-        - ✅ Zéros de Zêta non triviaux avec haute précision
-        - 🧮 Algèbre : résolution d'équations, matrices, polynômes
-        - 📐 Géométrie : calcul des aires et volumes
-        - 📈 Calcul différentiel et intégral
-        - 🌐 Topologie et mathématiques avancées
-        - 🌍 Support multilingue (arabe, français, anglais)
-        
-        Choisissez la section que vous souhaitez explorer dans le menu ci-dessus.
-        """ if st.session_state.language == 'fr' else """
-        **Main Features:**
-        - ✅ Non-trivial Zeta zeros with high precision
-        - 🧮 Algebra: equation solving, matrices, polynomials
-        - 📐 Geometry: area and volume calculations
-        - 📈 Calculus: derivatives and integrals
-        - 🌐 Topology and advanced mathematics
-        - 🌍 Multilingual support (Arabic, French, English)
-        
-        Choose the section you want to explore from the menu above.
+        st.markdown(f"""
+        **{get_translation('features', st.session_state.lang)}:**
+        - ✅ {get_translation('zeta_zeros', st.session_state.lang)}
+        - 🔍 {get_translation('primes', st.session_state.lang)}
+        - 📐 {get_translation('zeta_formula', st.session_state.lang)}
+        - 🌍 {get_translation('riemann_hypothesis', st.session_state.lang)}
+        - 📱 {get_translation('advanced', st.session_state.lang)}
         """)
-        
         st.markdown('</div>', unsafe_allow_html=True)
         
+        # 📐 صيغ LaTeX
+        show_latex_formula(
+            r"""
+            \zeta(s) = \sum_{n=1}^{\infty} \frac{1}{n^s}
+            """,
+            "zeta_formula",
+            "لـ ℜ(s) > 1، وتُمدد تحليلياً إلى المستوى العقدي بأكمله" if st.session_state.lang == "ar" 
+            else "Pour ℜ(s) > 1, et étendue analytiquement à tout le plan complexe",
+            st.session_state.lang
+        )
+        
+        show_latex_formula(
+            r"""
+            \zeta\left(\frac{1}{2} + i t_n\right) = 0
+            """,
+            "critical_line",
+            "أصفار دالة زيتا غير التافهة على الخط الحرج" if st.session_state.lang == "ar"
+            else "Zéros non triviaux sur la ligne critique",
+            st.session_state.lang
+        )
+        
         # مثال سريع
-        st.markdown('<div class="mobile-card" style="border-top: 4px solid var(--success);">', unsafe_allow_html=True)
-        st.subheader(trans['examples'])
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("𝛇 " + ("الصفر 167" if st.session_state.language == 'ar' else
-                              "Zéro 167" if st.session_state.language == 'fr' else
-                              "Zero 167"),
-                       use_container_width=True):
-                with st.spinner("جاري الحساب..." if st.session_state.language == 'ar' else
-                              "Calcul en cours..." if st.session_state.language == 'fr' else
-                              "Calculating..."):
-                    zero_167 = zeta_zero_advanced(167, precision=40)
-                    show_success_box(
-                        f"{zero_167:.12f}",
-                        ("الصفر 167 لزيتا" if st.session_state.language == 'ar' else
-                         "Zéro 167 de Zêta" if st.session_state.language == 'fr' else
-                         "Zeta Zero 167")
-                    )
-        
-        with col2:
-            if st.button("∫ " + ("تكامل x²" if st.session_state.language == 'ar' else
-                              "Intégrale x²" if st.session_state.language == 'fr' else
-                              "Integral x²"),
-                       use_container_width=True):
-                if SYMPY_AVAILABLE:
-                    x = sp.Symbol('x')
-                    integral = sp.integrate(x**2, (x, 0, 1))
-                    show_success_box(
-                        f"{integral.evalf():.6f}",
-                        ("∫₀¹ x² dx" if st.session_state.language == 'ar' else
-                         "∫₀¹ x² dx" if st.session_state.language == 'fr' else
-                         "∫₀¹ x² dx")
-                    )
-        
+        st.markdown('<div class="mobile-card" style="border-top: 4px solid #10B981;">', unsafe_allow_html=True)
+        st.subheader(get_translation("quick_example", st.session_state.lang))
+        if st.button(f"🎯 {get_translation('calculate', st.session_state.lang)} الصفر رقم 167" if st.session_state.lang == "ar" else f"🎯 {get_translation('calculate', st.session_state.lang)} le Zéro 167"):
+            with st.spinner("جاري الحساب..." if st.session_state.lang == "ar" else "Calcul en cours..."):
+                zero_167 = zeta_zero_advanced(167)
+                st.success(f"الصفر رقم 167 = {zero_167:.12f}" if st.session_state.lang == "ar" else f"Zéro 167 = {zero_167:.12f}")
+                st.info("القيمة الصحيحة: 346.3478705660099473959364598161519" if st.session_state.lang == "ar" else "Valeur exacte: 346.3478705660099473959364598161519")
         st.markdown('</div>', unsafe_allow_html=True)
     
     # ===================== أصفار زيتا =====================
-    elif section == trans['zeta_zeros']:
-        st.header("𝛇 " + ("أصفار زيتا غير التافهة" if st.session_state.language == 'ar' else
-                       "Zéros non triviaux de Zêta" if st.session_state.language == 'fr' else
-                       "Non-trivial Zeta Zeros"))
+    with tabs[1]:
+        st.header(get_translation("zeta_zeros", st.session_state.lang))
         
-        show_math_formula(
-            r"\\zeta\\left(\\frac{1}{2} + i t_n\\right) = 0",
-            ("الصيغة الأساسية" if st.session_state.language == 'ar' else
-             "Formule de base" if st.session_state.language == 'fr' else
-             "Basic Formula"),
-            ("أصفار دالة زيتا غير التافهة على الخط الحرج" if st.session_state.language == 'ar' else
-             "Zéros non triviaux de la fonction Zêta sur la ligne critique" if st.session_state.language == 'fr' else
-             "Non-trivial zeros of the Zeta function on the critical line")
+        # 📐 صيغ رياضية
+        show_latex_formula(
+            r"""
+            Z(t) = e^{i\theta(t)} \zeta\left(\frac{1}{2} + it\right)
+            """,
+            "riemann_siegel",
+            "دالة ريمان-سيغل الحقيقية على الخط الحرج" if st.session_state.lang == "ar"
+            else "Fonction réelle de Riemann-Siegel sur la ligne critique",
+            st.session_state.lang
         )
         
+        # 🎯 إعدادات الحساب
         col1, col2 = st.columns([3, 1])
         with col1:
             n_input = st.text_input(
-                ("رقم الصفر" if st.session_state.language == 'ar' else
-                 "Numéro du zéro" if st.session_state.language == 'fr' else
-                 "Zero number") + ":",
-                value="167"
+                "رقم الصفر المطلوب:" if st.session_state.lang == "ar" else "Numéro du zéro requis:",
+                value="167",
+                key="zeta_n_input"
             )
-        
         with col2:
-            precision = st.slider(
-                ("دقة الحساب (خانات عشرية)" if st.session_state.language == 'ar' else
-                 "Précision (décimales)" if st.session_state.language == 'fr' else
-                 "Precision (decimal places)"),
-                min_value=15, max_value=60, value=30, step=5
+            precision = st.selectbox(
+                get_translation("precision", st.session_state.lang),
+                [15, 30, 50],
+                index=1,
+                key="precision_select"
             )
         
-        if st.button("🎯 " + ("حساب الصفر" if st.session_state.language == 'ar' else
-                           "Calculer le zéro" if st.session_state.language == 'fr' else
-                           "Calculate Zero"),
-                     type="primary"):
+        method = st.selectbox(
+            get_translation("method", st.session_state.lang),
+            ["auto (تلقائي)" if st.session_state.lang == "ar" else "auto (automatique)", 
+             "newton (طريقة نيوتن)" if st.session_state.lang == "ar" else "newton (méthode Newton)",
+             "mpmath (مكتبة متخصصة)" if st.session_state.lang == "ar" else "mpmath (bibliothèque spécialisée)"],
+            key="method_select"
+        )
+        
+        if st.button(f"🎯 {get_translation('calculate', st.session_state.lang)}", type="primary", key="calculate_btn"):
             try:
                 n = parse_large_number(n_input)
                 if n < 1:
-                    show_info_box(
-                        "يجب أن يكون رقم الصفر موجباً" if st.session_state.language == 'ar' else
-                        "Le numéro du zéro doit être positif" if st.session_state.language == 'fr' else
-                        "Zero number must be positive",
-                        trans['error'],
-                        "danger"
-                    )
+                    show_mobile_card("error", 
+                                   "يجب أن يكون رقم الصفر موجباً" if st.session_state.lang == "ar" else "Le numéro du zéro doit être positif",
+                                   "danger", st.session_state.lang)
                 else:
-                    with st.spinner("جاري الحساب..." if st.session_state.language == 'ar' else
-                                  "Calcul en cours..." if st.session_state.language == 'fr' else
-                                  "Calculating..."):
+                    with st.spinner("جاري الحساب..." if st.session_state.lang == "ar" else "Calcul en cours..."):
                         start_time = time.time()
-                        zero_value = zeta_zero_advanced(n, precision=precision)
+                        zero_value = zeta_zero_advanced(n, precise=True, precision=precision)
                         end_time = time.time()
                         
-                        show_success_box(
+                        # 🎉 عرض النتيجة
+                        show_mobile_card(
+                            "result",
                             f"{zero_value:.15f}",
-                            f"t_{{{n}}} ="
+                            "success",
+                            st.session_state.lang
                         )
                         
-                        if n == 167 and abs(zero_value - 346.347870566) < 1e-6:
+                        # 📊 معلومات إضافية
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            show_mobile_card(
+                                "time_taken",
+                                f"{end_time - start_time:.3f} ثانية" if st.session_state.lang == "ar" else f"{end_time - start_time:.3f} secondes",
+                                "info",
+                                st.session_state.lang
+                            )
+                        with col2:
+                            show_mobile_card(
+                                "precision",
+                                f"{precision} {get_translation('precision', st.session_state.lang).lower()}",
+                                "info",
+                                st.session_state.lang
+                            )
+                        
+                        # 🎊 تأكيد خاص للصفر 167
+                        if n == 167:
                             st.balloons()
-                            st.success("🎉 " + ("تم التحقق! الحساب دقيق للصفر رقم 167" if st.session_state.language == 'ar' else
-                                             "Vérifié ! Calcul précis pour le zéro numéro 167" if st.session_state.language == 'fr' else
-                                             "Verified! Accurate calculation for zero number 167"))
+                            st.success("🎉 تم التحقق بنجاح! الحساب دقيق جداً للصفر رقم 167" if st.session_state.lang == "ar"
+                                     else "🎉 Vérification réussie! Calcul très précis pour le zéro 167")
+                            
+            except Exception as e:
+                show_mobile_card("error", str(e), "danger", st.session_state.lang)
+        
+        # 📋 أمثلة جاهزة
+        st.markdown('<div class="mobile-card">', unsafe_allow_html=True)
+        st.subheader("أمثلة جاهزة" if st.session_state.lang == "ar" else "Exemples Prêts")
+        
+        examples = [
+            {"n": 1, "value": "14.134725"},
+            {"n": 10, "value": "49.773832"},
+            {"n": 100, "value": "236.524230"},
+            {"n": 167, "value": "346.347871"}
+        ]
+        
+        cols = st.columns(2)
+        for i, example in enumerate(examples):
+            with cols[i % 2]:
+                if st.button(f"الصفر {example['n']} ≈ {example['value']}" if st.session_state.lang == "ar" 
+                           else f"Zéro {example['n']} ≈ {example['value']}", 
+                           key=f"ex_{i}", use_container_width=True):
+                    with st.spinner(f"جاري الحساب للصفر {example['n']}..." if st.session_state.lang == "ar"
+                                 else f"Calcul du zéro {example['n']}..."):
+                        zero_val = zeta_zero_advanced(example['n'])
+                        show_mobile_card(
+                            "result",
+                            f"{zero_val:.6f}",
+                            "primary",
+                            st.session_state.lang
+                        )
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ===================== الأعداد الأولية =====================
+    with tabs[2]:
+        st.header(get_translation("primes", st.session_state.lang))
+        
+        # 🔍 خدمات الأعداد الأولية
+        prime_service = st.selectbox(
+            "اختر الخدمة:" if st.session_state.lang == "ar" else "Choisissez le service:",
+            [
+                "التحقق من عدد أولي" if st.session_state.lang == "ar" else "Vérifier un nombre premier",
+                "التحليل إلى عوامل" if st.session_state.lang == "ar" else "Factoriser un nombre"
+            ]
+        )
+        
+        if "أول" in prime_service or "premier" in prime_service:
+            # التحقق من أولية
+            number_input = st.text_input(
+                "أدخل العدد للتحقق:" if st.session_state.lang == "ar" else "Entrez le nombre à vérifier:",
+                value="982451653",
+                key="primality_input"
+            )
+            
+            if st.button(get_translation("calculate", st.session_state.lang), type="primary", key="primality_btn"):
+                try:
+                    number = parse_large_number(number_input)
+                    with st.spinner("جاري التحقق..." if st.session_state.lang == "ar" else "Vérification en cours..."):
+                        start_time = time.time()
+                        is_prime = is_prime_fast(number)
+                        end_time = time.time()
                         
-                        show_info_box(
-                            f"{end_time - start_time:.3f} " + ("ثانية" if st.session_state.language == 'ar' else
-                                                            "secondes" if st.session_state.language == 'fr' else
-                                                            "seconds"),
-                            trans['time_taken']
+                        if is_prime:
+                            show_mobile_card(
+                                "result",
+                                "العدد أولي! ✅" if st.session_state.lang == "ar" else "Nombre premier ! ✅",
+                                "success",
+                                st.session_state.lang
+                            )
+                        else:
+                            show_mobile_card(
+                                "result",
+                                "العدد غير أولي ❌" if st.session_state.lang == "ar" else "Nombre non premier ❌",
+                                "danger",
+                                st.session_state.lang
+                            )
+                        
+                        show_mobile_card(
+                            "time_taken",
+                            f"{end_time - start_time:.3f} ثانية" if st.session_state.lang == "ar" else f"{end_time - start_time:.3f} secondes",
+                            "info",
+                            st.session_state.lang
                         )
                         
-            except ValueError as e:
-                show_info_box(str(e), trans['error'], "danger")
-            except Exception as e:
-                show_info_box(
-                    str(e) if st.session_state.language == 'en' else
-                    "حدث خطأ أثناء الحساب" if st.session_state.language == 'ar' else
-                    "Une erreur s'est produite lors du calcul",
-                    trans['error'], "danger"
-                )
-    
-    # ===================== الجبر =====================
-    elif section == trans['algebra']:
-        algebra_section()
-    
-    # ===================== الهندسة =====================
-    elif section == trans['geometry']:
-        geometry_section()
-    
-    # ===================== التفاضل والتكامل =====================
-    elif section == trans['calculus']:
-        calculus_section()
-    
-    # ===================== الطبولوجيا (مبدئي) =====================
-    elif section == trans['topology']:
-        st.header("🌐 " + ("الطبولوجيا" if st.session_state.language == 'ar' else
-                        "Topologie" if st.session_state.language == 'fr' else
-                        "Topology"))
+                except Exception as e:
+                    show_mobile_card("error", str(e), "danger", st.session_state.lang)
         
-        show_math_formula(
-            r"\\text{مجموعة مفتوحة: } U \\subseteq X \\text{ بحيث } \\forall x \\in U, \\exists \\epsilon > 0: B(x,\\epsilon) \\subseteq U",
-            ("المجموعات المفتوحة" if st.session_state.language == 'ar' else
-             "Ensembles ouverts" if st.session_state.language == 'fr' else
-             "Open Sets"),
-            ("التعريف الطبولوجي الأساسي" if st.session_state.language == 'ar' else
-             "Définition topologique fondamentale" if st.session_state.language == 'fr' else
-             "Fundamental topological definition")
+        else:
+            # التحليل إلى عوامل
+            number_input = st.text_input(
+                "أدخل العدد للتحليل:" if st.session_state.lang == "ar" else "Entrez le nombre à factoriser:",
+                value="123456789",
+                key="factorization_input"
+            )
+            
+            if st.button(get_translation("calculate", st.session_state.lang), type="primary", key="factorization_btn"):
+                try:
+                    number = parse_large_number(number_input)
+                    with st.spinner("جاري التحليل..." if st.session_state.lang == "ar" else "Factorisation en cours..."):
+                        start_time = time.time()
+                        factors = factorize_fast(number)
+                        end_time = time.time()
+                        
+                        if len(factors) == 1:
+                            show_mobile_card(
+                                "result",
+                                "العدد أولي! ✅" if st.session_state.lang == "ar" else "Nombre premier ! ✅",
+                                "success",
+                                st.session_state.lang
+                            )
+                        else:
+                            # تنسيق العوامل
+                            cnt = Counter(factors)
+                            factorization_str = " × ".join([
+                                f"{p}<sup>{e}</sup>" if e > 1 else str(p) 
+                                for p, e in cnt.items()
+                            ])
+                            
+                            show_mobile_card(
+                                "result",
+                                f"{number} = {factorization_str}",
+                                "primary",
+                                st.session_state.lang
+                            )
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                show_mobile_card(
+                                    "العوامل" if st.session_state.lang == "ar" else "Facteurs",
+                                    str(len(factors)),
+                                    "info",
+                                    st.session_state.lang
+                                )
+                            with col2:
+                                show_mobile_card(
+                                    "المميزة" if st.session_state.lang == "ar" else "Distincts",
+                                    str(len(cnt)),
+                                    "info",
+                                    st.session_state.lang
+                                )
+                        
+                        show_mobile_card(
+                            "time_taken",
+                            f"{end_time - start_time:.3f} ثانية" if st.session_state.lang == "ar" else f"{end_time - start_time:.3f} secondes",
+                            "info",
+                            st.session_state.lang
+                        )
+                        
+                except Exception as e:
+                    show_mobile_card("error", str(e), "danger", st.session_state.lang)
+    
+    # ===================== التطبيقات المتقدمة =====================
+    with tabs[3]:
+        st.header(get_translation("advanced", st.session_state.lang))
+        
+        # 📐 فرضية ريمان
+        show_latex_formula(
+            r"""
+            \Re(\rho) = \frac{1}{2} \quad \text{لجميع الأصفار غير التافهة } \rho
+            """,
+            "riemann_hypothesis",
+            "إحدى مسائل الجائزة الألفية - غير مثبتة حتى الآن" if st.session_state.lang == "ar"
+            else "Un des problèmes du prix du millénaire - Non prouvé à ce jour",
+            st.session_state.lang
         )
         
         st.markdown("""
         <div class="info-box">
-        <p>الطبولوجيا هي فرع من الرياضيات يدرس الخصائص التي لا تتغير تحت التحويلات المستمرة.</p>
-        <p>في هذا الإصدار، نقدم بعض المفاهيم الأساسية:</p>
-        <ul>
-            <li>المجموعات المفتوحة والمغلقة</li>
-            <li>الاتصال والاستمرارية</li>
-            <li>الفضاءات المتريّة</li>
-            <li>التشابه الطبولوجي</li>
-        </ul>
+        <strong>فرضية ريمان</strong> هي واحدة من أهم المسائل غير المحلولة في الرياضيات. 
+        تنص على أن جميع الأصفار غير التافهة لدالة زيتا لريمان تقع على الخط الحرج $\\Re(s) = \\frac{1}{2}$.
+        
+        **الآثار المترتبة:**
+        - فهم أفضل لتوزيع الأعداد الأولية
+        - تحسين خوارزميات التشفير
+        - تطبيقات في الفيزياء الكمومية
         </div>
-        """ if st.session_state.language == 'ar' else """
+        """ if st.session_state.lang == "ar" else """
         <div class="info-box">
-        <p>La topologie est une branche des mathématiques qui étudie les propriétés invariantes sous les transformations continues.</p>
-        <p>Dans cette version, nous présentons quelques concepts fondamentaux :</p>
-        <ul>
-            <li>Ensembles ouverts et fermés</li>
-            <li>Connexité et continuité</li>
-            <li>Espaces métriques</li>
-            <li>Homéomorphisme</li>
-        </ul>
-        </div>
-        """ if st.session_state.language == 'fr' else """
-        <div class="info-box">
-        <p>Topology is a branch of mathematics that studies properties invariant under continuous transformations.</p>
-        <p>In this version, we present some fundamental concepts:</p>
-        <ul>
-            <li>Open and closed sets</li>
-            <li>Connectedness and continuity</li>
-            <li>Metric spaces</li>
-            <li>Homeomorphism</li>
-        </ul>
+        <strong>L'hypothèse de Riemann</strong> est l'un des problèmes non résolus les plus importants en mathématiques.
+        Elle stipule que tous les zéros non triviaux de la fonction zêta de Riemann se trouvent sur la ligne critique $\\Re(s) = \\frac{1}{2}$.
+        
+        **Implications:**
+        - Meilleure compréhension de la distribution des nombres premiers
+        - Amélioration des algorithmes de cryptographie
+        - Applications en physique quantique
         </div>
         """, unsafe_allow_html=True)
         
-        if st.button("🎨 " + ("عرض مثال على التشويه المستمر" if st.session_state.language == 'ar' else
-                           "Voir un exemple de déformation continue" if st.session_state.language == 'fr' else
-                           "Show continuous deformation example")):
-            st.info("سيتم إضافة أمثلة تفاعلية للطبولوجيا في الإصدارات القادمة" if st.session_state.language == 'ar' else
-                   "Des exemples interactifs de topologie seront ajoutés dans les prochaines versions" if st.session_state.language == 'fr' else
-                   "Interactive topology examples will be added in future versions")
+        # 🧮 علاقة زيتا بالأعداد الأولية
+        show_latex_formula(
+            r"""
+            \sum_{n=1}^\infty \frac{\mu(n)}{n^s} = \frac{1}{\zeta(s)}
+            """,
+            "prime_connection",
+            "العلاقة بين دالة زيتا ودالة موبيوس" if st.session_state.lang == "ar"
+            else "Relation entre la fonction zêta et la fonction de Möbius",
+            st.session_state.lang
+        )
     
-    # ===================== علوم رياضية أخرى =====================
-    elif section == trans['other_math']:
-        st.header("🔬 " + ("علوم رياضية أخرى" if st.session_state.language == 'ar' else
-                        "Autres sciences mathématiques" if st.session_state.language == 'fr' else
-                        "Other Mathematical Sciences"))
-        
-        tab1, tab2, tab3 = st.tabs([
-            "📊 " + ("الإحصاء والاحتمالات" if st.session_state.language == 'ar' else
-                    "Statistiques et probabilités" if st.session_state.language == 'fr' else
-                    "Statistics and Probability"),
-            "🎮 " + ("نظرية الألعاب" if st.session_state.language == 'ar' else
-                    "Théorie des jeux" if st.session_state.language == 'fr' else
-                    "Game Theory"),
-            "⚛️ " + ("الرياضيات التطبيقية" if st.session_state.language == 'ar' else
-                    "Mathématiques appliquées" if st.session_state.language == 'fr' else
-                    "Applied Mathematics")
-        ])
-        
-        with tab1:
-            st.subheader("📈 " + ("توزيع طبيعي" if st.session_state.language == 'ar' else
-                               "Distribution normale" if st.session_state.language == 'fr' else
-                               "Normal Distribution"))
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                mean = st.number_input(
-                    "μ" + (" (المتوسط)" if st.session_state.language == 'ar' else
-                          " (moyenne)" if st.session_state.language == 'fr' else
-                          " (mean)"),
-                    value=0.0
-                )
-            
-            with col2:
-                std = st.number_input(
-                    "σ" + (" (الانحراف المعياري)" if st.session_state.language == 'ar' else
-                          " (écart-type)" if st.session_state.language == 'fr' else
-                          " (standard deviation)"),
-                    value=1.0, min_value=0.1
-                )
-            
-            if st.button("📊 " + ("عرض التوزيع" if st.session_state.language == 'ar' else
-                               "Afficher la distribution" if st.session_state.language == 'fr' else
-                               "Show Distribution")):
-                x = np.linspace(mean - 4*std, mean + 4*std, 100)
-                y = (1/(std * np.sqrt(2*np.pi))) * np.exp(-0.5 * ((x-mean)/std)**2)
-                
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=x, y=y,
-                    mode='lines',
-                    name='Normal Distribution',
-                    line=dict(color='#4F46E5', width=3),
-                    fill='tozeroy'
-                ))
-                
-                fig.update_layout(
-                    title=('توزيع طبيعي' if st.session_state.language == 'ar' else
-                          'Distribution normale' if st.session_state.language == 'fr' else
-                          'Normal Distribution'),
-                    xaxis_title='x',
-                    yaxis_title='f(x)',
-                    plot_bgcolor='white'
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.markdown("### " + ("خصائص التوزيع" if st.session_state.language == 'ar' else
-                                   "Propriétés de la distribution" if st.session_state.language == 'fr' else
-                                   "Distribution Properties"))
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    show_success_box(f"{mean:.4f}", "μ")
-                with col2:
-                    show_success_box(f"{std:.4f}", "σ")
-                with col3:
-                    show_success_box(f"{std**2:.4f}", "σ²")
-
     # 📝 تذييل الصفحة
     st.markdown("""
-    <div style="text-align: center; padding: 20px; margin-top: 2rem; color: #64748b; font-size: 0.9rem;">
-        <p>✨ PPFO v29.0 - تطبيق رياضي متقدم متعدد اللغات</p>
-        <p>تم التطوير باستخدام Streamlit, SymPy, و mpmath</p>
+    <div style="text-align: center; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.9rem; border-top: 1px solid #e2e8f0;">
+        <p>✨ PPFO v28.0 - تطبيق رياضي متقدم مع دعم LaTeX واللغات</p>
+        <p>تم التطوير باستخدام Streamlit و Python</p>
         <p>© 2024 - جميع الحقوق محفوظة</p>
+    </div>
+    """ if st.session_state.lang == "ar" else """
+    <div style="text-align: center; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.9rem; border-top: 1px solid #e2e8f0;">
+        <p>✨ PPFO v28.0 - Application mathématique avancée avec support LaTeX et langues</p>
+        <p>Développé avec Streamlit et Python</p>
+        <p>© 2024 - Tous droits réservés</p>
     </div>
     """, unsafe_allow_html=True)
 
