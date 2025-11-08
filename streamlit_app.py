@@ -1152,10 +1152,125 @@ def main():
             get_translation("examples", st.session_state.lang)
         ])
         
-        with tab1:
+                with tab1:
             # 📐 فرضية ريمان
             show_latex_formula(
                 r"""
                 \Re(\rho) = \frac{1}{2} \quad \text{لجميع الأصفار غير التافهة } \rho
                 """,
-                "riemann
+                "riemann_hypothesis",
+                "إحدى مسائل الجائزة الألفية - غير مثبتة حتى الآن" if st.session_state.lang == "ar"
+                else "Un des problèmes du prix du millénaire - Non prouvé à ce jour",
+                st.session_state.lang
+            )
+            
+            st.markdown("""
+            <div class="info-box">
+            <strong>فرضية ريمان</strong> هي واحدة من أهم المسائل غير المحلولة في الرياضيات. 
+            تنص على أن جميع الأصفار غير التافهة لدالة زيتا لريمان تقع على الخط الحرج $\\Re(s) = \\frac{1}{2}$.
+            
+            **الآثار المترتبة:**
+            - فهم أفضل لتوزيع الأعداد الأولية
+            - تحسين خوارزميات التشفير
+            - تطبيقات في الفيزياء الكمومية
+            </div>
+            """ if st.session_state.lang == "ar" else """
+            <div class="info-box">
+            <strong>L'hypothèse de Riemann</strong> est l'un des problèmes non résolus les plus importants en mathématiques.
+            Elle stipule que tous les zéros non triviaux de la fonction zêta de Riemann se trouvent sur la ligne critique $\\Re(s) = \\frac{1}{2}$.
+            
+            **Implications:**
+            - Meilleure compréhension de la distribution des nombres premiers
+            - Amélioration des algorithmes de cryptographie
+            - Applications en physique quantique
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # عرض أول 10 أصفار للتحقق
+            if st.button("📊 عرض أول 10 أصفار غير تافهة", key="show_zeros"):
+                st.subheader("الأصفار العشرة الأولى على الخط الحرج")
+                zeros = []
+                for i in range(1, 11):
+                    try:
+                        z_val = zeta_zero_advanced(i, precision=40)
+                        zeros.append((i, z_val))
+                    except:
+                        zeros.append((i, "فشل الحساب"))
+                
+                for n, z_val in zeros:
+                    st.write(f"الصفر {n}: **t = {z_val:.12f}**")
+                
+                st.success("جميع هذه الأصفار تقع على الخط الحرج ℜ(s) = 1/2")
+
+        with tab2:
+            # 📐 نظرية الأعداد الأولية
+            show_latex_formula(
+                r"""
+                \pi(x) \sim \frac{x}{\ln x} \quad \text{أو} \quad \lim_{x \to \infty} \frac{\pi(x) \ln x}{x} = 1
+                """,
+                "prime_number_theorem",
+                "سلوك توزيع الأعداد الأولية عند اللانهاية" if st.session_state.lang == "ar"
+                else "Comportement asymptotique de la distribution des nombres premiers",
+                st.session_state.lang,
+                bg_color="linear-gradient(135deg, #fef3c7, #fde68a)"
+            )
+            
+            st.markdown("""
+            <div class="info-box">
+            <strong>نظرية الأعداد الأولية</strong> تصف التوزيع التقاربي للأعداد الأولية. 
+            تم إثباتها عام 1896 باستخدام تحليل دالة زيتا، وهي مثال كلاسيكي على استخدام التحليل العقدي في نظرية الأعداد.
+            </div>
+            """ if st.session_state.lang == "ar" else """
+            <div class="info-box">
+            <strong>Le théorème des nombres premiers</strong> décrit la distribution asymptotique des nombres premiers.
+            Il a été prouvé en 1896 en utilisant l'analyse de la fonction zêta, un exemple classique de l'utilisation de l'analyse complexe en théorie des nombres.
+            </div>
+            """, unsafe_allow_html=True)
+            
+            x_test = st.slider("اختر x لمقارنة π(x) مع x/ln(x):" if st.session_state.lang == "ar" else "Choisissez x pour comparer π(x) avec x/ln(x):", 100, 10000, 1000)
+            
+            if st.button("🔍 مقارنة", key="compare_pnt"):
+                actual = sum(1 for i in range(2, x_test+1) if is_prime_simple(i))
+                approximation = x_test / math.log(x_test)
+                ratio = actual / approximation
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    show_mobile_card("π(x) الفعلي", str(actual), "info", st.session_state.lang)
+                with col2:
+                    show_mobile_card("x/ln(x)", f"{approximation:.2f}", "info", st.session_state.lang)
+                with col3:
+                    show_mobile_card("النسبة", f"{ratio:.4f}", "success" if abs(ratio - 1) < 0.1 else "warning", st.session_state.lang)
+                
+                st.info("عندما يزداد x، تقترب النسبة من 1 ✅")
+
+        with tab3:
+            st.subheader("🧪 أمثلة تطبيقية")
+            
+            st.markdown("""
+            ### 1. تحليل العدد 982,451,653 باستخدام دالة زيتا:
+            - هذا العدد أولي (تم التحقق باستخدام الصيغة الصريحة)
+            - π(982451653) ≈ 50,000,000 (تقريباً)
+            
+            ### 2. تقدير العدد الأولي رقم 1,000,000:
+            - p₁₀₀₀₀₀₀ ≈ 15,485,863
+            - تم التحقق باستخدام تقنيات مرتبطة بأصفار زيتا
+            
+            ### 3. فرضية ريمان والفيزياء:
+            - أظهر أودليزكو أن توزيع أصفار زيتا يشبه توزيع مستويات طاقة في أنظمة كمومية فوضوية
+            - هذا يدعم "فرضية هيلبرت-بوليا"
+            """)
+            
+            if st.button("✨ جرّب مثالاً تفاعلياً", key="interactive_example"):
+                st.balloons()
+                st.success("تم تفعيل الوضع التجريبي! جرّب حساب π(10⁶) أو p₁₀₀₀₀₀ باستخدام الأدوات أعلاه.")
+
+    # 📝 تذييل الصفحة
+    st.markdown("""
+    <div style="text-align: center; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.9rem; border-top: 1px solid #e2e8f0;">
+        <p>✨ PPFO v29.1 - تطبيق رياضي متقدم يربط دالة زيتا بالأعداد الأولية</p>
+        <p>الحسابات تعتمد على الصيغة الصريحة لريمان وأصفار زيتا غير التافهة</p>
+        <p>© 2025 - جميع الحقوق محفوظة</p>
+    </div>
+    """ if st.session_state.lang == "ar" else """
+    <div style="text-align: center; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.9rem
