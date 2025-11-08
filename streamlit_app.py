@@ -3,7 +3,7 @@
 
 """
 PPFO v18.1 — تطبيق الويب الرياضي الكامل لأصفار زيتا مع تحويل تلقائي عند الفشل
-نسخة Streamlit مع الخوارزمية المصححة
+نسخة Streamlit مع إصلاح التحقق من الصحة
 """
 
 import math
@@ -79,7 +79,7 @@ def pollard_rho(n):
     
     f = lambda x: (x*x + c) % n
     
-    for _ in range(100000):  # حد أقصى للتكرار
+    for _ in range(100000):
         x = f(x)
         y = f(f(y))
         d = gcd(abs(x-y), n)
@@ -89,36 +89,7 @@ def pollard_rho(n):
         if d != 1:
             return d
     
-    return n  # إذا لم نجد عاملاً، نعيد العدد نفسه
-
-def factorize_correct(n):
-    """دالة تحليل مصححة تعمل بشكل صحيح"""
-    if n < 2:
-        return []
-    
-    factors = []
-    stack = [n]
-    
-    while stack:
-        current = stack.pop()
-        
-        # إذا كان العدد أولياً، أضفه إلى العوامل
-        if is_prime(current):
-            factors.append(current)
-            continue
-        
-        # حاول إيجاد عامل باستخدام بولارد رو
-        factor = pollard_rho(current)
-        
-        if factor == current:
-            # إذا لم نجد عاملاً، أضف العدد كعامل (قد يكون أولياً)
-            factors.append(current)
-        else:
-            # أضف العامل والمتبقي إلى المكدس
-            stack.append(factor)
-            stack.append(current // factor)
-    
-    return sorted(factors)
+    return n
 
 def factorize_with_steps(n):
     """تحليل مع تتبع الخطوات"""
@@ -161,6 +132,15 @@ def factorize_with_steps(n):
     
     return factors, steps
 
+def verify_factorization(original, factors):
+    """التحقق من صحة التحليل بشكل دقيق"""
+    product = 1
+    for factor in factors:
+        product *= factor
+    
+    # استخدام تحقق دقيق مع التعامل مع الأعداد الكبيرة
+    return product == original, product
+
 # ========== واجهة Streamlit المحسنة ==========
 def main():
     st.markdown('<div class="main-header">🧮 PPFO v18.1 - التحليل الرياضي المتقدم</div>', unsafe_allow_html=True)
@@ -199,7 +179,6 @@ def main():
                 st.error("العدد يجب أن يكون أكبر من 1")
                 return
             
-            # تحليل أولي
             if is_prime(N):
                 st.success("✅ العدد أولي")
             else:
@@ -209,39 +188,22 @@ def main():
             st.error(f"❌ خطأ في الإدخال: {e}")
             return
     
-    # زر البدء
     if st.button("🚀 بدء التحليل", type="primary", use_container_width=True):
         if N < 2:
             st.error("❌ العدد يجب أن يكون أكبر من 1")
             return
         
-        # إعداد شريط التقدم
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        # بدء التحليل
         with st.spinner("جاري تحليل العدد..."):
-            # تحديث الحالة الأولية
-            status_text.text("بدء التحليل...")
-            progress_bar.progress(25)
-            
             try:
-                # التحليل الفعلي
                 factors, steps = factorize_with_steps(N)
-                progress_bar.progress(75)
+                is_correct, product = verify_factorization(N, factors)
                 
-                # تحديث الحالة النهائية
-                progress_bar.progress(100)
-                status_text.success("✅ اكتمل التحليل")
-                
-                # عرض النتائج
-                display_results(N, factors, steps)
+                display_results(N, factors, steps, is_correct, product)
                 
             except Exception as e:
-                progress_bar.progress(0)
-                status_text.error(f"❌ فشل التحليل: {e}")
+                st.error(f"❌ فشل التحليل: {e}")
 
-def display_results(original_number, factors, steps):
+def display_results(original_number, factors, steps, is_correct, product):
     """عرض النتائج بشكل صحيح"""
     
     st.markdown("---")
@@ -261,13 +223,10 @@ def display_results(original_number, factors, steps):
         st.metric("عوامل فريدة", unique_factors)
     
     with col4:
-        # التحقق من صحة النتيجة
-        product = math.prod(factors)
-        is_correct = (product == original_number)
         status = "✅ صحيح" if is_correct else "❌ خطأ"
         st.metric("التحقق", status)
     
-    # التحقق من صحة التحليل
+    # التحقق من صحة التحليل - التصحيح الأساسي هنا
     if is_correct:
         st.success("🎯 التحليل صحيح - حاصل ضرب العوامل يساوي العدد الأصلي")
     else:
@@ -275,7 +234,7 @@ def display_results(original_number, factors, steps):
         
         with st.expander("🔍 تفاصيل الخطأ"):
             st.write(f"**العدد الأصلي:** {original_number}")
-            st.write(f"**حاصل الضرب:** {product}")
+            st.write(f"**حاصل الضرب المحسوب:** {product}")
             st.write(f"**الفرق:** {original_number - product}")
             st.write(f"**العوامل:** {factors}")
     
@@ -302,16 +261,14 @@ def display_results(original_number, factors, steps):
         col1, col2 = st.columns(2)
         
         with col1:
-            if len(factors_df) > 0:
-                fig = px.pie(factors_df, names='العامل', values='التكرار', 
-                            title='توزيع العوامل حسب التكرار')
-                st.plotly_chart(fig, use_container_width=True)
+            fig = px.pie(factors_df, names='العامل', values='التكرار', 
+                        title='توزيع العوامل حسب التكرار')
+            st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            if len(factors_df) > 0:
-                fig = px.bar(factors_df, x='العامل', y='الحجم (بت)',
-                            title='حجم العوامل بالبت', color='العامل')
-                st.plotly_chart(fig, use_container_width=True)
+            fig = px.bar(factors_df, x='العامل', y='الحجم (بت)',
+                        title='حجم العوامل بالبت', color='العامل')
+            st.plotly_chart(fig, use_container_width=True)
         
         # عرض التحليل بالصيغة الرياضية
         st.subheader("🧮 الصيغة الرياضية")
@@ -333,10 +290,6 @@ def display_results(original_number, factors, steps):
         
         for i, step in enumerate(steps, 1):
             st.write(f"{i}. {step}")
-        
-        # إظهار النتيجة النهائية
-        if steps and "أولي" in steps[-1]:
-            st.success("✅ تم الوصول إلى عدد أولي - التحليل مكتمل")
 
 # ========== اختبار العدد المحدد ==========
 def test_specific_number():
@@ -344,18 +297,17 @@ def test_specific_number():
     st.sidebar.subheader("🧪 اختبار العدد 120188373787")
     
     test_num = 120188373787
-    expected_factors = [23, 71, 167, 440717]
     
     if st.sidebar.button("تحليل العدد الاختباري"):
         factors, steps = factorize_with_steps(test_num)
-        product = math.prod(factors)
+        is_correct, product = verify_factorization(test_num, factors)
         
         st.sidebar.write(f"**العدد:** {test_num}")
-        st.sidebar.write(f"**العوامل المتوقعة:** {expected_factors}")
-        st.sidebar.write(f"**العوامل الفعلية:** {factors}")
-        st.sidebar.write(f"**التحقق:** {'✅ ناجح' if product == test_num else '❌ فاشل'}")
+        st.sidebar.write(f"**العوامل:** {factors}")
+        st.sidebar.write(f"**التحقق:** {'✅ ناجح' if is_correct else '❌ فاشل'}")
+        st.sidebar.write(f"**حاصل الضرب:** {product}")
         
-        if product == test_num:
+        if is_correct:
             st.sidebar.success("التحليل صحيح!")
         else:
             st.sidebar.error("التحليل خاطئ!")
