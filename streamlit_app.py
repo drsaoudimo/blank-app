@@ -3,7 +3,7 @@
 
 """
 PPFO v20.3 — تطبيق الويب الرياضي المتقدم مع إطار ريمان الكامل
-نسخة Streamlit مع تفعيل كامل لخوارزميات ريمان
+نسخة Streamlit مع تحليل كامل للعوامل الأولية
 """
 
 import math
@@ -72,12 +72,10 @@ def zetazero(n, precise=False):
     if n <= len(RIEMANN_ZEROS):
         return RIEMANN_ZEROS[n-1]
     
-    # تقدير رياضي لأصفار زيتا
     gamma_est = (2 * math.pi * n) / math.log((n + 1.5) / (2 * math.pi))
     gamma_est += (1 / (2 * math.pi)) * math.log((n + 1.5) / (2 * math.pi))
     
     if precise:
-        # تصحيح إضافي للدقة
         gamma_est *= 1.0001 + (0.0001 * math.sin(gamma_est))
     
     return gamma_est
@@ -91,9 +89,9 @@ def riemann_correction(estimate, zeros=None):
     ln_x = math.log(x)
     s = 0.0
     
-    for gamma in zeros[:10]:  # استخدام أول 10 أصفار فقط للأداء
+    for gamma in zeros[:10]:
         term = math.cos(gamma * ln_x) / math.sqrt(0.25 + gamma * gamma)
-        weight = 1.0 / (1.0 + 0.1 * gamma)  # وزن يتناقص مع زيادة gamma
+        weight = 1.0 / (1.0 + 0.1 * gamma)
         s += weight * term
     
     correction = (math.sqrt(x) / max(1.0, ln_x)) * (s / (2 * math.pi))
@@ -107,7 +105,6 @@ def prime_nth_estimate(n, use_riemann=False):
     ln_n = math.log(n)
     ln_ln_n = math.log(ln_n)
     
-    # الصيغة الأساسية
     base = n * (ln_n + ln_ln_n - 1 + (ln_ln_n - 2) / ln_n)
     
     if n > 1000:
@@ -130,11 +127,9 @@ def factreaman(n):
     if n < 2:
         return n
     
-    # تقدير أولي باستخدام نظرية الأعداد الأولية
     bit_length = n.bit_length()
     prime_estimate = prime_nth_estimate(bit_length // 2, use_riemann=True)
     
-    # البحث عن عامل قابل للقسمة
     estimate = prime_estimate
     max_attempts = 100
     
@@ -159,14 +154,12 @@ def is_prime_fast(n):
     if n % 2 == 0:
         return 2
     
-    # اختبار بسيط للأعداد الصغيرة
     if n < 10000:
         for i in range(3, int(math.sqrt(n)) + 1, 2):
             if n % i == 0:
                 return False
         return True
     
-    # اختبار فيرما المعزز
     bases = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
     for a in bases:
         if a >= n:
@@ -182,6 +175,26 @@ def gcd(a, b):
         a, b = b, a % b
     return a
 
+def trial_division_small_factors(n, limit=10000):
+    """تحليل بالقسمة المتكررة للعوامل الصغيرة"""
+    factors = []
+    
+    # اختبار القسمة على 2
+    while n % 2 == 0:
+        factors.append(2)
+        n //= 2
+    
+    # اختبار القسمة على الأعداد الفردية
+    f = 3
+    while f * f <= n and f <= limit:
+        if n % f == 0:
+            factors.append(f)
+            n //= f
+        else:
+            f += 2
+    
+    return factors, n
+
 def brent_rho(n, timeout=None, use_riemann=False):
     """خوارزمية Brent Rho مع تحسينات ريمان"""
     if n % 2 == 0:
@@ -193,7 +206,6 @@ def brent_rho(n, timeout=None, use_riemann=False):
     c = random.randrange(1, n-1)
     
     if use_riemann:
-        # استخدام أصفار زيتا لتوليد c محسّن
         zero_idx = random.randint(1, min(10, len(RIEMANN_ZEROS)))
         gamma = RIEMANN_ZEROS[zero_idx - 1]
         c = (c + int(math.cos(gamma) * 1000)) % (n-1) + 1
@@ -237,11 +249,10 @@ def pollard_rho_riemann(n, timeout=None):
     
     start = time.time()
     
-    for attempt in range(10):  # محاولات متعددة مع معلمات مختلفة
+    for attempt in range(10):
         if timeout and (time.time() - start) > timeout:
             return None
         
-        # استخدام أصفار زيتا لتوليد معلمات أولية محسنة
         zero_idx = (attempt % len(RIEMANN_ZEROS)) + 1
         gamma = zetazero(zero_idx)
         
@@ -273,63 +284,68 @@ def pollard_rho_riemann(n, timeout=None):
     return None
 
 # ========== دوال التحليل الرئيسية مع ريمان ==========
-def factorize_with_riemann(n, timeout=60, use_riemann=True, verbose=False):
-    """تحليل العدد باستخدام إطار ريمان الكامل"""
+def factorize_to_primes(n, timeout=60, use_riemann=True, verbose=False):
+    """تحليل العدد completely إلى عوامله الأولية فقط"""
     if n < 2:
         return [], []
     
-    factors = []
+    all_prime_factors = []
     steps = []
-    current = n
-    iteration = 0
-    max_iterations = 1000
-    
+    numbers_to_factor = [n]
     start_time = time.time()
     
-    while current > 1 and iteration < max_iterations:
-        iteration += 1
-        
+    while numbers_to_factor:
         if timeout and (time.time() - start_time) > timeout:
             steps.append("⏰ انتهى الوقت المحدد للتحليل")
             break
+            
+        current = numbers_to_factor.pop()
         
-        # إذا كان أولياً، أضفه وتوقف
+        if current == 1:
+            continue
+            
+        # إذا كان أولياً، أضفه إلى النتائج
         if is_prime_fast(current):
-            factors.append(current)
+            all_prime_factors.append(current)
             steps.append(f"{current} هو عدد أولي ✅")
-            break
+            continue
         
-        # محاولة إيجاد عامل باستخدام factreaman (سريع)
+        # المرحلة 1: التحليل بالعوامل الصغيرة
+        small_factors, remaining = trial_division_small_factors(current)
+        if small_factors:
+            all_prime_factors.extend(small_factors)
+            steps.append(f"تحليل بالقسمة: {current} → {small_factors} + {remaining}")
+            if remaining > 1:
+                numbers_to_factor.append(remaining)
+            continue
+        
+        # المرحلة 2: Factreaman سريع
         if use_riemann:
             f = factreaman(current)
             if f and f != current and current % f == 0:
-                factors.append(f)
                 steps.append(f"{current} ÷ {f} = {current // f} (Factreaman + Riemann)")
-                current = current // f
+                numbers_to_factor.extend([f, current // f])
                 continue
         
-        # محاولة باستخدام Brent Rho مع ريمان
+        # المرحلة 3: Brent Rho
         d = brent_rho(current, timeout=timeout, use_riemann=use_riemann)
         if d and d != current:
-            factors.append(d)
             steps.append(f"{current} ÷ {d} = {current // d} (Brent-Rho + Riemann)")
-            current = current // d
+            numbers_to_factor.extend([d, current // f])
             continue
         
-        # محاولة باستخدام Pollard Rho مع ريمان
+        # المرحلة 4: Pollard Rho مع ريمان
         d = pollard_rho_riemann(current, timeout=timeout)
         if d and d != current:
-            factors.append(d)
             steps.append(f"{current} ÷ {d} = {current // d} (Pollard-Rho + Riemann)")
-            current = current // d
+            numbers_to_factor.extend([d, current // d])
             continue
         
-        # إذا فشلت جميع المحاولات، نضيف العدد المتبقي
-        factors.append(current)
+        # إذا فشلت جميع المحاولات
+        all_prime_factors.append(current)
         steps.append(f"{current} لم نتمكن من تحليله بالكامل ⚠️")
-        break
     
-    return factors, steps
+    return sorted(all_prime_factors), steps
 
 def verify_factorization(original, factors):
     """التحقق من صحة التحليل"""
@@ -343,7 +359,6 @@ def verify_factorization(original, factors):
 def main():
     st.markdown('<div class="main-header">🧮 PPFO v20.3 - الإطار الرياضي المتقدم مع ريمان</div>', unsafe_allow_html=True)
     
-    # معلومات النظام وميزات ريمان
     with st.sidebar:
         st.header("⚙️ إطار ريمان الرياضي")
         st.markdown('<div class="riemann-feature">🧠 تفعيل إطار ريمان الكامل</div>', unsafe_allow_html=True)
@@ -355,10 +370,9 @@ def main():
         st.write("✅ خوارزميات Pollard/Brent مع ريمان")
         st.write(f"**عدد أصفار زيتا:** {len(RIEMANN_ZEROS)}")
         
-        use_riemann = st.checkbox("تفعيل إطار ريمان", value=True, help="استخدام التقنيات الرياضية المتقدمة لأصفار زيتا")
+        use_riemann = st.checkbox("تفعيل إطار ريمان", value=True)
         show_riemann_info = st.checkbox("عرض معلومات ريمان", value=True)
     
-    # إدخال الرقم
     col1, col2 = st.columns([2, 1])
     
     with col1:
@@ -401,7 +415,6 @@ def main():
             st.error(f"❌ خطأ في الإدخال: {e}")
             return
     
-    # إعدادات التحليل المتقدم
     st.subheader("⚙️ إعدادات التحليل المتقدم")
     
     col1, col2 = st.columns(2)
@@ -414,16 +427,14 @@ def main():
         advanced_methods = st.checkbox("استخدام خوارزميات متقدمة", value=True)
         save_results = st.checkbox("حفظ النتائج", value=False)
     
-    # زر البدء مع تفعيل ريمان
-    if st.button("🚀 بدء التحليل مع ريمان", type="primary", use_container_width=True):
+    if st.button("🚀 بدء التحليل المتعمق", type="primary", use_container_width=True):
         if N < 2:
             st.error("❌ العدد يجب أن يكون أكبر من 1")
             return
         
-        with st.spinner("جاري التحليل باستخدام إطار ريمان الرياضي..."):
+        with st.spinner("جاري التحليل المتعمق باستخدام إطار ريمان..."):
             try:
-                # التحليل باستخدام ريمان
-                factors, steps = factorize_with_riemann(
+                factors, steps = factorize_to_primes(
                     N, 
                     timeout=timeout, 
                     use_riemann=use_riemann,
@@ -432,12 +443,11 @@ def main():
                 
                 is_correct, product = verify_factorization(N, factors)
                 
-                # معلومات ريمان الإضافية
                 riemann_info = {}
                 if use_riemann and show_riemann_info:
                     riemann_info = calculate_riemann_metrics(N, factors)
                 
-                display_results(N, factors, steps, is_correct, product, riemann_info)
+                display_results(N, factors, steps, is_correct, product, riemann_info, show_steps)
                 
             except Exception as e:
                 st.error(f"❌ فشل التحليل: {e}")
@@ -446,32 +456,27 @@ def calculate_riemann_metrics(n, factors):
     """حساب مقاييس ريمان للتحليل"""
     metrics = {}
     
-    # تقدير ريمان للعدد الأولي
     bit_length = n.bit_length()
     prime_estimate = prime_nth_estimate(bit_length // 2, use_riemann=True)
     metrics["تقدير_ريمان_للعوامل"] = prime_estimate
     
-    # تصحيح ريمان
     correction = riemann_correction(n)
     metrics["تصحيح_ريمان"] = correction
     
-    # استخدام أصفار زيتا في التحليل
     metrics["أصفار_زيتا_المستخدمة"] = len(RIEMANN_ZEROS)
     
-    # تحليل توزيع العوامل
     if factors:
         factor_product = math.prod(factors)
         metrics["دقة_التحليل"] = abs(n - factor_product)
     
     return metrics
 
-def display_results(original_number, factors, steps, is_correct, product, riemann_info=None):
+def display_results(original_number, factors, steps, is_correct, product, riemann_info=None, show_steps=True):
     """عرض النتائج مع معلومات ريمان"""
     
     st.markdown("---")
     st.subheader("📊 النتائج النهائية")
     
-    # البطاقات الإحصائية
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -488,7 +493,6 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
         status = "✅ صحيح" if is_correct else "❌ خطأ"
         st.metric("التحقق", status)
     
-    # معلومات ريمان
     if riemann_info:
         st.subheader("🧮 معلومات ريمان الرياضية")
         riemann_col1, riemann_col2 = st.columns(2)
@@ -504,7 +508,6 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
             if 'دقة_التحليل' in riemann_info:
                 st.write(f"دقة التحليل: {riemann_info['دقة_التحليل']}")
     
-    # التحقق من صحة التحليل
     if is_correct:
         st.success("🎯 التحليل صحيح - حاصل ضرب العوامل يساوي العدد الأصلي")
     else:
@@ -516,13 +519,34 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
             st.write(f"**الفرق:** {original_number - product}")
             st.write(f"**العوامل:** {factors}")
     
-    # عرض العوامل
-    st.subheader("🧩 العوامل المكتشفة")
+    st.subheader("🧩 العوامل الأولية المكتشفة")
     
     if factors:
+        # التحقق من أن جميع العوامل أولية
+        non_prime_factors = [f for f in factors if not is_prime_fast(f) and f > 1]
+        
+        if non_prime_factors:
+            st.error(f"❌ يوجد {len(non_prime_factors)} عامل غير أولي: {non_prime_factors}")
+            st.warning("🔍 جاري إعادة تحليل العوامل غير الأولية...")
+            
+            # إعادة تحليل العوامل غير الأولية
+            all_prime_factors = []
+            for factor in factors:
+                if is_prime_fast(factor) or factor == 1:
+                    all_prime_factors.append(factor)
+                else:
+                    sub_factors, _ = factorize_to_primes(factor, timeout=10, use_riemann=True)
+                    all_prime_factors.extend(sub_factors)
+            
+            factors = all_prime_factors
+            
+            # التحقق مرة أخرى
+            is_correct, product = verify_factorization(original_number, factors)
+            if is_correct:
+                st.success("✅ تم تحليل جميع العوامل إلى عوامل أولية")
+        
         factor_counts = Counter(factors)
         
-        # إنشاء جدول العوامل
         factors_data = []
         for factor, count in factor_counts.items():
             prime_status = "✅" if is_prime_fast(factor) else "❌"
@@ -536,7 +560,13 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
         factors_df = pd.DataFrame(factors_data)
         st.dataframe(factors_df, use_container_width=True)
         
-        # مخططات العوامل
+        # التأكد النهائي من أن جميع العوامل أولية
+        final_non_prime = [f for f in factors if not is_prime_fast(f) and f > 1]
+        if not final_non_prime:
+            st.success("✅ جميع العوامل أولية")
+        else:
+            st.error(f"❌ لا يزال هناك عوامل غير أولية: {final_non_prime}")
+        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -549,7 +579,6 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
                         title='حجم العوامل بالبت', color='أولي')
             st.plotly_chart(fig, use_container_width=True)
         
-        # عرض التحليل بالصيغة الرياضية
         st.subheader("🧮 الصيغة الرياضية")
         factor_str = " × ".join([f"{factor}^{count}" if count > 1 else str(factor) 
                                for factor, count in factor_counts.items()])
@@ -562,18 +591,15 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
     else:
         st.warning("⚠️ لم يتم العثور على أي عوامل")
     
-    # خطوات التحليل
     if steps and show_steps:
-        st.subheader("📋 خطوات التحليل مع ريمان")
+        st.subheader("📋 خطوات التحليل")
         
         for i, step in enumerate(steps, 1):
-            # تمييز خطوات ريمان
             if "ريمان" in step or "Riemann" in step or "زيتا" in step:
                 st.info(f"{i}. {step} 🌟")
             else:
                 st.write(f"{i}. {step}")
 
-# ========== اختبارات ريمان ==========
 def riemann_tests():
     """اختبارات وتجارب ريمان"""
     st.sidebar.subheader("🧪 تجارب ريمان")
@@ -588,16 +614,7 @@ def riemann_tests():
         test_num = 123456789
         result = factreaman(test_num)
         st.sidebar.write(f"Factreaman({test_num}) = {result}")
-    
-    if st.sidebar.button("مقارنة التقديرات"):
-        n = 100
-        classic = prime_nth_estimate(n, use_riemann=False)
-        riemann = prime_nth_estimate(n, use_riemann=True)
-        st.sidebar.write(f"التقدير الكلاسيكي: {classic}")
-        st.sidebar.write(f"التقدير بريمان: {riemann}")
-        st.sidebar.write(f"الفرق: {riemann - classic}")
 
-# ========== التشغيل الرئيسي ==========
 if __name__ == "__main__":
     riemann_tests()
     main()
