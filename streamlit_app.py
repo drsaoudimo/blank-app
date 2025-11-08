@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+st.session_state.lang#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 PPFO v29.1 Streamlit Web Application — إصدار متكامل مع تحسينات رياضية متقدمة
@@ -1152,7 +1152,7 @@ def main():
             get_translation("examples", st.session_state.lang)
         ])
         
-                with tab1:
+        with tab1:
             # 📐 فرضية ريمان
             show_latex_formula(
                 r"""
