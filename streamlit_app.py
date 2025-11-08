@@ -3,7 +3,7 @@
 
 """
 PPFO v18.1 — تطبيق الويب الرياضي الكامل لأصفار زيتا مع تحويل تلقائي عند الفشل
-نسخة Streamlit التفاعلية المحسنة
+نسخة Streamlit التفاعلية المحسنة والمصححة
 """
 
 import math
@@ -815,13 +815,12 @@ def main():
         display_results(N, shared, advanced_math, save_results)
 
 def enhanced_factorize_with_preferences(N, enabled_methods, custom_settings):
-    """نسخة محسنة من التحليل للاستخدام في الويب"""
+    """نسخة محسنة ومصححة من التحليل للاستخدام في الويب"""
     shared = SharedData(N)
     
     # إنشاء عناصر الواجهة
     progress_bar = st.progress(0)
     status_text = st.empty()
-    results_placeholder = st.empty()
     
     shared.progress_bar = progress_bar
     shared.status_text = status_text
@@ -835,7 +834,6 @@ def enhanced_factorize_with_preferences(N, enabled_methods, custom_settings):
                    109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 
                    173, 179, 181, 191, 193, 197, 199]
     
-    temp_N = N
     start_time = time.time()
     max_time = custom_settings["max_time"]
     
@@ -853,18 +851,36 @@ def enhanced_factorize_with_preferences(N, enabled_methods, custom_settings):
         **📊 التقدم:** {progress:.1f}%  
         **🔢 العوامل المكتشفة:** {factors_found}  
         **🔍 الباقي:** {remaining_bits} بت  
-        **🔎 الطرق المستخدمة:** {', '.join(set(m for _, m in shared.methods))}
         """
+        
+        if shared.methods:
+            unique_methods = set(m for _, m in shared.methods)
+            status_info += f"**🔎 الطرق المستخدمة:** {', '.join(unique_methods)}"
+        
         shared.status_text.markdown(status_info)
     
-    # التحليل بالعوامل الصغيرة
+    # التحليل الحقيقي - التصحيح الأساسي هنا
+    def factorize_number(n, method_name, method_func):
+        """دالة مساعدة لتحليل عدد باستخدام طريقة محددة"""
+        if n <= 1 or is_prime_fast(n):
+            return n, None
+        
+        factor = method_func(n)
+        if factor and 1 < factor < n:
+            # التحقق من أن العامل يقبل القسمة
+            if n % factor == 0:
+                return factor, n // factor
+        return None, None
+    
+    # التحليل بالعوامل الصغيرة أولاً
     if enabled_methods.get("small", True):
+        current_n = shared.remainder
         for p in small_primes:
-            if temp_N % p == 0:
+            if current_n % p == 0:
                 count = 0
-                while temp_N % p == 0:
+                while current_n % p == 0:
                     count += 1
-                    temp_N //= p
+                    current_n //= p
                 shared.consume(p, "Small")
                 update_display()
                 
@@ -886,46 +902,58 @@ def enhanced_factorize_with_preferences(N, enabled_methods, custom_settings):
         ])
     
     strategy_idx = 0
-    attempts = 0
+    attempts_without_progress = 0
+    max_attempts_without_progress = 10
     
-    while temp_N > 1 and not shared.stop_event.is_set():
+    current_remainder = shared.remainder
+    
+    while current_remainder > 1 and not shared.stop_event.is_set():
         if time.time() - start_time > max_time > 0:
             shared.status_text.warning("⏰ انتهى الوقت المحدد")
             break
         
-        if is_prime_fast(temp_N):
-            shared.consume(temp_N, "Prime-Final")
+        # إذا كان العدد أولي، أضفه كعامل نهائي
+        if is_prime_fast(current_remainder):
+            shared.consume(current_remainder, "Prime-Final")
             break
         
         # تجربة الاستراتيجية الحالية
         strategy_name, strategy_func = strategies[strategy_idx % len(strategies)]
-        factor = strategy_func(temp_N)
         
-        attempts += 1
-        if attempts > 5:  # تغيير الاستراتيجية بعد 5 محاولات فاشلة
-            strategy_idx += 1
-            attempts = 0
-            shared.record_strategy_switch(
-                strategies[(strategy_idx-1) % len(strategies)][0],
-                strategies[strategy_idx % len(strategies)][0],
-                "تكرار المحاولات الفاشلة"
-            )
+        # استخدام الطريقة الحالية للتحليل
+        factor, new_remainder = factorize_number(current_remainder, strategy_name, strategy_func)
         
-        if factor and 1 < factor < temp_N:
+        if factor is not None:
+            # نجحنا في إيجاد عامل
             shared.consume(factor, strategy_name)
-            temp_N = shared.remainder
-            attempts = 0  # إعادة تعيين العدادات عند النجاح
+            current_remainder = shared.remainder  # تحديث من shared object
+            attempts_without_progress = 0
             update_display()
+        else:
+            # فشل في إيجاد عامل
+            attempts_without_progress += 1
+            
+            # تغيير الاستراتيجية إذا فشلت多次
+            if attempts_without_progress >= max_attempts_without_progress:
+                old_strategy = strategies[strategy_idx % len(strategies)][0]
+                strategy_idx += 1
+                new_strategy = strategies[strategy_idx % len(strategies)][0]
+                shared.record_strategy_switch(
+                    old_strategy,
+                    new_strategy,
+                    f"فشل {attempts_without_progress} محاولات متتالية"
+                )
+                attempts_without_progress = 0
         
         # تحديث الواجهة بشكل دوري
-        if attempts % 3 == 0:
-            update_display()
+        update_display()
         
-        time.sleep(0.1)  # منع الحمل الزائد على النظام
+        # إضافة تأخير صغير لمنع الحمل الزائد
+        time.sleep(0.1)
     
-    # إذا بقي جزء ولم نستطع تحليله
-    if temp_N > 1 and not is_prime_fast(temp_N):
-        shared.consume(temp_N, "Remainder")
+    # التحقق النهائي من أن الباقي أولي
+    if shared.remainder > 1 and is_prime_fast(shared.remainder):
+        shared.consume(shared.remainder, "Prime-Final")
     
     shared.progress_bar.progress(100)
     shared.status_text.success("✅ اكتمل التحليل")
@@ -960,34 +988,42 @@ def display_results(N, shared, show_math=True, save_results=False):
         else:
             st.metric("🎯 الدقة", "100%")
     
-    # التحقق من صحة النتيجة
+    # التحقق من صحة النتيجة - التصحيح الأساسي هنا
     factor_counts = Counter(shared.factors)
     product = 1
-    for f, e in factor_counts.items():
-        product *= pow(f, e)
+    for factor, count in factor_counts.items():
+        product *= (factor ** count)
     
     if product == N:
         st.success("✅ التحليل صحيح - حاصل ضرب العوامل يساوي العدد الأصلي")
     else:
         st.error("❌ هناك خطأ في التحليل - حاصل الضرب لا يساوي العدد الأصلي")
         st.info(f"الفرق: {N - product}")
+        
+        # عرض تفاصيل الخطأ للمساعدة في التصحيح
+        with st.expander("🔍 تفاصيل الخطأ"):
+            st.write(f"**العدد الأصلي:** {N}")
+            st.write(f"**حاصل الضرب:** {product}")
+            st.write(f"**العوامل:** {dict(factor_counts)}")
     
     # عرض العوامل
     st.subheader("🧩 العوامل المكتشفة")
     
     if shared.factors:
+        # حساب التكرارات بشكل صحيح
+        factor_counts = Counter(shared.factors)
         factors_data = []
-        for (factor, method), (base, exp) in zip(
-            zip(shared.factors, [m for f, m in shared.methods]),
-            factor_counts.items()
-        ):
+        
+        for factor, count in factor_counts.items():
+            # العثور على الطريقة المستخدمة لهذا العامل
+            method = next((m for f, m in shared.methods if f == factor), "Unknown")
             factors_data.append({
                 "العامل": factor,
-                "الأساس": base,
-                "الأس": exp,
-                "الحجم (بت)": base.bit_length(),
+                "الأساس": factor,
+                "الأس": count,
+                "الحجم (بت)": factor.bit_length(),
                 "الطريقة": method,
-                "النسبة (%)": (base.bit_length() / N.bit_length()) * 100
+                "النسبة (%)": (factor.bit_length() * count / N.bit_length()) * 100
             })
         
         factors_df = pd.DataFrame(factors_data)
@@ -1076,7 +1112,7 @@ def display_results(N, shared, show_math=True, save_results=False):
         الحالة: {'مكتمل' if shared.remainder == 1 else 'غير مكتمل'}
         
         العوامل:
-        {chr(10).join(f'- {f[1]}: {f[0]}' for f in zip(shared.factors, [m for _, m in shared.methods]))}
+        {chr(10).join(f'- {factor}^{count}' for factor, count in Counter(shared.factors).items())}
         
         الرؤى الرياضية:
         {chr(10).join(f'- {insight}' for insight in shared.mathematical_insights)}
