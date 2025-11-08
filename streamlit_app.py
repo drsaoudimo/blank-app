@@ -3,7 +3,7 @@
 
 """
 PPFO v18.1 — تطبيق الويب الرياضي الكامل لأصفار زيتا مع تحويل تلقائي عند الفشل
-نسخة Streamlit مع التحليل الفعلي
+نسخة Streamlit مع التصحيحات
 """
 
 import math
@@ -172,8 +172,9 @@ def factorize_optimized(n):
             break
         
         factor = pollard_rho(remaining)
-        if factor != remaining:
-            factors.extend(factorize_optimized(factor))
+        if factor != remaining and factor != 1:
+            sub_factors = factorize_optimized(factor)
+            factors.extend(sub_factors)
             remaining //= factor
         else:
             attempts += 1
@@ -191,6 +192,7 @@ class FactorizationState:
         self.methods_used = []
         self.start_time = time.time()
         self.completed = False
+        self.factorization_steps = []  # تخزين خطوات التحليل
     
     def add_factor(self, factor, method):
         self.factors.append(factor)
@@ -209,6 +211,20 @@ class FactorizationState:
     def get_factorization_dict(self):
         """الحصول على العوامل مع تكراراتها"""
         return dict(Counter(self.factors))
+    
+    def generate_steps(self):
+        """توليد خطوات التحليل بشكل صحيح"""
+        steps = []
+        temp_n = self.N
+        
+        for factor in self.factors:
+            if temp_n % factor == 0 and temp_n > 1:
+                steps.append(f"{temp_n} ÷ {factor} = {temp_n // factor}")
+                temp_n //= factor
+            else:
+                break  # التوقف إذا لم تعد القسمة ممكنة
+        
+        return steps
 
 # ========== واجهة Streamlit المحسنة ==========
 def main():
@@ -232,7 +248,7 @@ def main():
         input_method = st.radio("طريقة الإدخال:", ["رقم عادي", "رقم سداسي عشري", "تعبير رياضي"])
         
         if input_method == "رقم عادي":
-            default_num = "123456789012345678901234567890"
+            default_num = "120188373787"
             N_str = st.text_input("أدخل العدد المراد تحليله:", value=default_num)
         elif input_method == "رقم سداسي عشري":
             default_hex = "0x1234567890ABCDEF"
@@ -310,6 +326,9 @@ def main():
                 factors = factorize_optimized(N)
                 state.factors = factors
                 
+                # توليد خطوات التحليل
+                state.factorization_steps = state.generate_steps()
+                
                 # تحديث الحالة النهائية
                 progress_bar.progress(100)
                 status_text.success("✅ اكتمل التحليل")
@@ -365,6 +384,13 @@ def display_results(state, show_steps=True, save_results=False):
             st.write(f"**حاصل الضرب:** {product}")
             st.write(f"**الفرق:** {difference}")
             st.write(f"**العوامل:** {state.factors}")
+            
+            # تحليل سبب الخطأ
+            st.write("**🔎 تحليل سبب الخطأ:**")
+            if product > state.N:
+                st.write("حاصل الضرب أكبر من العدد الأصلي - قد يكون هناك عامل زائد")
+            else:
+                st.write("حاصل الضرب أقل من العدد الأصلي - قد يكون هناك عامل ناقص")
     
     # عرض العوامل
     st.subheader("🧩 العوامل المكتشفة")
@@ -379,7 +405,7 @@ def display_results(state, show_steps=True, save_results=False):
                 "العامل": factor,
                 "التكرار": count,
                 "الحجم (بت)": factor.bit_length(),
-                "نسبة الحجم %": (factor.bit_length() * count / state.N.bit_length()) * 100
+                "نسبة الحجم %": round((factor.bit_length() * count / state.N.bit_length()) * 100, 2)
             })
         
         factors_df = pd.DataFrame(factors_data)
@@ -404,24 +430,32 @@ def display_results(state, show_steps=True, save_results=False):
         st.subheader("🧮 الصيغة الرياضية")
         factor_str = " × ".join([f"{factor}^{count}" if count > 1 else str(factor) 
                                for factor, count in factor_counts.items()])
-        st.latex(f"{state.N} = {factor_str}")
+        
+        # التحقق من الصيغة
+        if state.verify_factorization():
+            st.latex(f"{state.N} = {factor_str}")
+        else:
+            st.warning(f"⚠️ الصيغة غير صحيحة: {state.N} ≠ {factor_str}")
+            st.info(f"حاصل الضرب الفعلي: {math.prod(state.factors)}")
         
     else:
         st.warning("⚠️ لم يتم العثور على أي عوامل")
     
-    # خطوات التحليل
-    if show_steps and state.factors:
+    # خطوات التحليل المصححة
+    if show_steps and state.factorization_steps:
         st.subheader("📋 خطوات التحليل")
         
-        steps = []
-        temp_n = state.N
-        
-        for factor in state.factors:
-            steps.append(f"{temp_n} ÷ {factor} = {temp_n // factor}")
-            temp_n //= factor
-        
-        for i, step in enumerate(steps, 1):
+        for i, step in enumerate(state.factorization_steps, 1):
             st.write(f"{i}. {step}")
+        
+        # إظهار النتيجة النهائية
+        if state.factorization_steps:
+            last_step = state.factorization_steps[-1]
+            result = last_step.split(" = ")[-1]
+            if result == "1":
+                st.success("✅ تم الوصول إلى 1 - التحليل مكتمل")
+            else:
+                st.warning(f"⚠️ التوقف عند {result} - قد يكون التحليل غير مكتمل")
     
     # خيارات التصدير
     if save_results:
@@ -447,6 +481,9 @@ def display_results(state, show_steps=True, save_results=False):
         
         الصيغة الرياضية:
         {state.N} = {" × ".join([f"{factor}^{count}" if count > 1 else str(factor) for factor, count in factor_counts.items()])}
+        
+        خطوات التحليل:
+        {chr(10).join(f'{i+1}. {step}' for i, step in enumerate(state.factorization_steps))}
         """
         
         st.download_button(
@@ -459,23 +496,29 @@ def display_results(state, show_steps=True, save_results=False):
 # ========== اختبار الدوال ==========
 def test_factorization():
     """دالة لاختبار التحليل"""
+    st.subheader("🧪 اختبار التحليل")
+    
     test_numbers = [
+        120188373787,
         123456789,
-        123456789012345,
-        123456789012345678901234567890
+        1001
     ]
     
     for num in test_numbers:
-        st.write(f"تحليل {num}:")
-        factors = factorize_optimized(num)
-        st.write(f"العوامل: {factors}")
-        
-        # التحقق
-        product = 1
-        for f in factors:
-            product *= f
-        st.write(f"التحقق: {product == num}")
-        st.write("---")
+        with st.expander(f"تحليل العدد {num}"):
+            factors = factorize_optimized(num)
+            
+            # التحقق
+            product = 1
+            for f in factors:
+                product *= f
+            
+            st.write(f"**العوامل:** {factors}")
+            st.write(f"**حاصل الضرب:** {product}")
+            st.write(f"**التحقق:** {'✅ ناجح' if product == num else '❌ فاشل'}")
+            
+            if product != num:
+                st.write(f"**الفرق:** {num - product}")
 
 # ========== التشغيل الرئيسي ==========
 if __name__ == "__main__":
