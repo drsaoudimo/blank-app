@@ -42,6 +42,12 @@ st.markdown("""
         border-radius: 0.5rem;
         margin: 0.5rem 0;
     }
+    .factor-analysis {
+        background-color: #f8f9fa;
+        border-left: 4px solid #1f77b4;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -284,19 +290,21 @@ def pollard_rho_riemann(n, timeout=None):
     return None
 
 # ========== دوال التحليل الرئيسية مع ريمان ==========
-def factorize_to_primes(n, timeout=60, use_riemann=True, verbose=False):
+def factorize_completely(n, timeout=60, use_riemann=True, max_iterations=1000):
     """تحليل العدد completely إلى عوامله الأولية فقط"""
     if n < 2:
-        return [], []
+        return []
     
-    all_prime_factors = []
-    steps = []
+    all_factors = []
     numbers_to_factor = [n]
+    iterations = 0
+    
     start_time = time.time()
     
-    while numbers_to_factor:
+    while numbers_to_factor and iterations < max_iterations:
+        iterations += 1
+        
         if timeout and (time.time() - start_time) > timeout:
-            steps.append("⏰ انتهى الوقت المحدد للتحليل")
             break
             
         current = numbers_to_factor.pop()
@@ -306,46 +314,124 @@ def factorize_to_primes(n, timeout=60, use_riemann=True, verbose=False):
             
         # إذا كان أولياً، أضفه إلى النتائج
         if is_prime_fast(current):
-            all_prime_factors.append(current)
-            steps.append(f"{current} هو عدد أولي ✅")
+            all_factors.append(current)
             continue
+        
+        factor_found = False
         
         # المرحلة 1: التحليل بالعوامل الصغيرة
         small_factors, remaining = trial_division_small_factors(current)
         if small_factors:
-            all_prime_factors.extend(small_factors)
-            steps.append(f"تحليل بالقسمة: {current} → {small_factors} + {remaining}")
+            all_factors.extend(small_factors)
             if remaining > 1:
                 numbers_to_factor.append(remaining)
+            factor_found = True
             continue
         
         # المرحلة 2: Factreaman سريع
-        if use_riemann:
+        if not factor_found and use_riemann:
             f = factreaman(current)
             if f and f != current and current % f == 0:
-                steps.append(f"{current} ÷ {f} = {current // f} (Factreaman + Riemann)")
                 numbers_to_factor.extend([f, current // f])
+                factor_found = True
                 continue
         
         # المرحلة 3: Brent Rho
-        d = brent_rho(current, timeout=timeout, use_riemann=use_riemann)
-        if d and d != current:
-            steps.append(f"{current} ÷ {d} = {current // d} (Brent-Rho + Riemann)")
-            numbers_to_factor.extend([d, current // f])
-            continue
+        if not factor_found:
+            d = brent_rho(current, timeout=timeout/10, use_riemann=use_riemann)
+            if d and d != current:
+                numbers_to_factor.extend([d, current // d])
+                factor_found = True
+                continue
         
         # المرحلة 4: Pollard Rho مع ريمان
-        d = pollard_rho_riemann(current, timeout=timeout)
-        if d and d != current:
-            steps.append(f"{current} ÷ {d} = {current // d} (Pollard-Rho + Riemann)")
-            numbers_to_factor.extend([d, current // d])
+        if not factor_found:
+            d = pollard_rho_riemann(current, timeout=timeout/10)
+            if d and d != current:
+                numbers_to_factor.extend([d, current // d])
+                factor_found = True
+                continue
+        
+        # إذا فشلت جميع المحاولات، نضيف العدد كما هو
+        if not factor_found:
+            all_factors.append(current)
+    
+    return sorted(all_factors)
+
+def factorize_with_steps(n, timeout=60, use_riemann=True):
+    """تحليل مع تتبع الخطوات"""
+    if n < 2:
+        return [], []
+    
+    factors = []
+    steps = []
+    current = n
+    iteration = 0
+    max_iterations = 100
+    
+    start_time = time.time()
+    
+    while current > 1 and iteration < max_iterations:
+        iteration += 1
+        
+        if timeout and (time.time() - start_time) > timeout:
+            steps.append("⏰ انتهى الوقت المحدد للتحليل")
+            break
+        
+        # إذا كان أولياً، أضفه وتوقف
+        if is_prime_fast(current):
+            factors.append(current)
+            steps.append(f"{current} هو عدد أولي ✅")
+            break
+        
+        factor_found = False
+        
+        # التحليل بالعوامل الصغيرة
+        small_factors, remaining = trial_division_small_factors(current)
+        if small_factors:
+            factors.extend(small_factors)
+            steps.append(f"تحليل بالقسمة: {current} → {small_factors} + {remaining}")
+            current = remaining
+            factor_found = True
             continue
         
+        # Factreaman
+        if not factor_found and use_riemann:
+            f = factreaman(current)
+            if f and f != current and current % f == 0:
+                factors.append(f)
+                steps.append(f"{current} ÷ {f} = {current // f} (Factreaman + Riemann)")
+                current = current // f
+                factor_found = True
+                continue
+        
+        # Brent Rho
+        if not factor_found:
+            d = brent_rho(current, timeout=timeout/10, use_riemann=use_riemann)
+            if d and d != current:
+                factors.append(d)
+                steps.append(f"{current} ÷ {d} = {current // d} (Brent-Rho + Riemann)")
+                current = current // d
+                factor_found = True
+                continue
+        
+        # Pollard Rho
+        if not factor_found:
+            d = pollard_rho_riemann(current, timeout=timeout/10)
+            if d and d != current:
+                factors.append(d)
+                steps.append(f"{current} ÷ {d} = {current // d} (Pollard-Rho + Riemann)")
+                current = current // d
+                factor_found = True
+                continue
+        
         # إذا فشلت جميع المحاولات
-        all_prime_factors.append(current)
-        steps.append(f"{current} لم نتمكن من تحليله بالكامل ⚠️")
+        if not factor_found:
+            factors.append(current)
+            steps.append(f"{current} لم نتمكن من تحليله بالكامل ⚠️")
+            break
     
-    return sorted(all_prime_factors), steps
+    return factors, steps
 
 def verify_factorization(original, factors):
     """التحقق من صحة التحليل"""
@@ -372,6 +458,7 @@ def main():
         
         use_riemann = st.checkbox("تفعيل إطار ريمان", value=True)
         show_riemann_info = st.checkbox("عرض معلومات ريمان", value=True)
+        show_steps = st.checkbox("عرض خطوات التحليل", value=True)
     
     col1, col2 = st.columns([2, 1])
     
@@ -421,10 +508,8 @@ def main():
     
     with col1:
         timeout = st.slider("الوقت الأقصى (ثواني)", 1, 300, 60)
-        show_steps = st.checkbox("عرض خطوات التحليل", value=True)
     
     with col2:
-        advanced_methods = st.checkbox("استخدام خوارزميات متقدمة", value=True)
         save_results = st.checkbox("حفظ النتائج", value=False)
     
     if st.button("🚀 بدء التحليل المتعمق", type="primary", use_container_width=True):
@@ -434,20 +519,36 @@ def main():
         
         with st.spinner("جاري التحليل المتعمق باستخدام إطار ريمان..."):
             try:
-                factors, steps = factorize_to_primes(
+                # التحليل الأولي
+                initial_factors, steps = factorize_with_steps(
                     N, 
                     timeout=timeout, 
-                    use_riemann=use_riemann,
-                    verbose=True
+                    use_riemann=use_riemann
                 )
                 
-                is_correct, product = verify_factorization(N, factors)
+                # التحليل النهائي لضمان أن جميع العوامل أولية
+                final_factors = []
+                for factor in initial_factors:
+                    if is_prime_fast(factor):
+                        final_factors.append(factor)
+                    else:
+                        # تحليل العوامل غير الأولية
+                        sub_factors = factorize_completely(
+                            factor, 
+                            timeout=max(10, timeout//5), 
+                            use_riemann=use_riemann
+                        )
+                        final_factors.extend(sub_factors)
                 
+                # التحقق النهائي
+                is_correct, product = verify_factorization(N, final_factors)
+                
+                # معلومات ريمان
                 riemann_info = {}
                 if use_riemann and show_riemann_info:
-                    riemann_info = calculate_riemann_metrics(N, factors)
+                    riemann_info = calculate_riemann_metrics(N, final_factors)
                 
-                display_results(N, factors, steps, is_correct, product, riemann_info, show_steps)
+                display_results(N, final_factors, steps, is_correct, product, riemann_info, show_steps)
                 
             except Exception as e:
                 st.error(f"❌ فشل التحليل: {e}")
@@ -493,6 +594,7 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
         status = "✅ صحيح" if is_correct else "❌ خطأ"
         st.metric("التحقق", status)
     
+    # معلومات ريمان
     if riemann_info:
         st.subheader("🧮 معلومات ريمان الرياضية")
         riemann_col1, riemann_col2 = st.columns(2)
@@ -508,6 +610,7 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
             if 'دقة_التحليل' in riemann_info:
                 st.write(f"دقة التحليل: {riemann_info['دقة_التحليل']}")
     
+    # التحقق من صحة التحليل
     if is_correct:
         st.success("🎯 التحليل صحيح - حاصل ضرب العوامل يساوي العدد الأصلي")
     else:
@@ -519,34 +622,22 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
             st.write(f"**الفرق:** {original_number - product}")
             st.write(f"**العوامل:** {factors}")
     
-    st.subheader("🧩 العوامل الأولية المكتشفة")
+    # تحليل العوامل
+    st.subheader("🔍 تحليل العوامل المكتشفة")
     
     if factors:
-        # التحقق من أن جميع العوامل أولية
-        non_prime_factors = [f for f in factors if not is_prime_fast(f) and f > 1]
+        # التحقق من أولية جميع العوامل
+        non_prime_factors = [f for f in set(factors) if not is_prime_fast(f) and f > 1]
+        prime_factors = [f for f in set(factors) if is_prime_fast(f) and f > 1]
         
         if non_prime_factors:
             st.error(f"❌ يوجد {len(non_prime_factors)} عامل غير أولي: {non_prime_factors}")
-            st.warning("🔍 جاري إعادة تحليل العوامل غير الأولية...")
-            
-            # إعادة تحليل العوامل غير الأولية
-            all_prime_factors = []
-            for factor in factors:
-                if is_prime_fast(factor) or factor == 1:
-                    all_prime_factors.append(factor)
-                else:
-                    sub_factors, _ = factorize_to_primes(factor, timeout=10, use_riemann=True)
-                    all_prime_factors.extend(sub_factors)
-            
-            factors = all_prime_factors
-            
-            # التحقق مرة أخرى
-            is_correct, product = verify_factorization(original_number, factors)
-            if is_correct:
-                st.success("✅ تم تحليل جميع العوامل إلى عوامل أولية")
+        else:
+            st.success(f"✅ جميع العوامل أولية ({len(prime_factors)} عامل أولي)")
         
         factor_counts = Counter(factors)
         
+        # إنشاء جدول العوامل
         factors_data = []
         for factor, count in factor_counts.items():
             prime_status = "✅" if is_prime_fast(factor) else "❌"
@@ -560,13 +651,7 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
         factors_df = pd.DataFrame(factors_data)
         st.dataframe(factors_df, use_container_width=True)
         
-        # التأكد النهائي من أن جميع العوامل أولية
-        final_non_prime = [f for f in factors if not is_prime_fast(f) and f > 1]
-        if not final_non_prime:
-            st.success("✅ جميع العوامل أولية")
-        else:
-            st.error(f"❌ لا يزال هناك عوامل غير أولية: {final_non_prime}")
-        
+        # مخططات العوامل
         col1, col2 = st.columns(2)
         
         with col1:
@@ -579,6 +664,7 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
                         title='حجم العوامل بالبت', color='أولي')
             st.plotly_chart(fig, use_container_width=True)
         
+        # الصيغة الرياضية
         st.subheader("🧮 الصيغة الرياضية")
         factor_str = " × ".join([f"{factor}^{count}" if count > 1 else str(factor) 
                                for factor, count in factor_counts.items()])
@@ -588,9 +674,27 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
         else:
             st.warning(f"⚠️ الصيغة غير صحيحة: {original_number} ≠ {factor_str}")
         
+        # تحليل إضافي للعوامل غير الأولية
+        if non_prime_factors:
+            st.subheader("🔧 تحليل إضافي للعوامل غير الأولية")
+            for factor in non_prime_factors:
+                with st.expander(f"تحليل العامل {factor}"):
+                    sub_factors = factorize_completely(factor, timeout=30, use_riemann=True)
+                    sub_counts = Counter(sub_factors)
+                    sub_str = " × ".join([f"{f}^{c}" if c > 1 else str(f) for f, c in sub_counts.items()])
+                    st.write(f"**تحليل {factor}:** {sub_str}")
+                    
+                    # التحقق من التحليل
+                    sub_product = math.prod(sub_factors)
+                    if sub_product == factor:
+                        st.success(f"✅ تحليل صحيح: {factor} = {sub_product}")
+                    else:
+                        st.error(f"❌ تحليل خاطئ: {factor} ≠ {sub_product}")
+        
     else:
         st.warning("⚠️ لم يتم العثور على أي عوامل")
     
+    # خطوات التحليل
     if steps and show_steps:
         st.subheader("📋 خطوات التحليل")
         
