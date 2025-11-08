@@ -1272,5 +1272,8 @@ def main():
         <p>الحسابات تعتمد على الصيغة الصريحة لريمان وأصفار زيتا غير التافهة</p>
         <p>© 2025 - جميع الحقوق محفوظة</p>
     </div>
-    """ if st.session_state.lang == "ar" else """
+    """ 
+if st.session_state.lang == "ar" 
+else 
+"""
     <div style="text-align: center; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.9rem
