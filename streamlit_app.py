@@ -304,7 +304,7 @@ try:
     mp.mp.dps = 60  # دقة عالية جداً
 except Exception:
     MP_MATH_AVAILABLE = False
-    st.warning("تحذير: mpmath غير متوفر").
+    st.warning("تحذير: mpmath غير متوفر")
 
 # 📐 ثوابت رياضية
 EULER_GAMMA = 0.57721566490153286060651209008240243104215933593992
