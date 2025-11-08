@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PPFO v24.0 Streamlit Web Application — نسخة محسنة مع خدمات جديدة وتحسينات السرعة
+PPFO v24.0 Streamlit Web Application — نسخة محسنة مع دعم الأعداد الكبيرة
 تطبيق ويب باستخدام Streamlit
 """
 import streamlit as st
-import math, random, time, sys
+import math, random, time, sys, re
 from functools import lru_cache
 from collections import Counter
 
@@ -33,6 +33,64 @@ except Exception:
     mpz = int
 
 EULER_GAMMA = 0.57721566490153286060651209008240243104215933593992
+
+# ===================== دوال لمعالجة الأعداد الكبيرة =====================
+
+def parse_large_number(input_str):
+    """تحويل النص إلى عدد كبير مع دعم التنسيقات المختلفة"""
+    if not input_str or not input_str.strip():
+        raise ValueError("الرجاء إدخال عدد")
+    
+    input_str = str(input_str).strip().replace(',', '').replace(' ', '')
+    
+    # التعامل مع الترميز العلمي
+    if 'e' in input_str.lower():
+        try:
+            base, exp = input_str.lower().split('e')
+            return int(float(base) * (10 ** float(exp)))
+        except:
+            pass
+    
+    # التعامل مع الترميز بالقوى
+    if '^' in input_str or '**' in input_str:
+        try:
+            if '^' in input_str:
+                base, exp = input_str.split('^')
+            else:
+                base, exp = input_str.split('**')
+            return int(base) ** int(exp)
+        except:
+            pass
+    
+    # محاولة التحويل المباشر
+    try:
+        return int(input_str)
+    except ValueError:
+        raise ValueError(f"لا يمكن تحويل '{input_str}' إلى عدد صحيح")
+
+def format_large_number(n):
+    """تنسيق الأعداد الكبيرة لعرضها بشكل مقروء"""
+    n_str = str(n)
+    if len(n_str) <= 15:
+        return n_str
+    
+    # استخدام الترميز العلمي للأعداد الكبيرة جداً
+    if len(n_str) > 50:
+        return f"{n_str[0]}.{n_str[1:6]}e+{len(n_str)-1}"
+    
+    # إضافة فواصل للأعداد الكبيرة
+    parts = []
+    while n_str:
+        parts.append(n_str[-3:])
+        n_str = n_str[:-3]
+    return ','.join(reversed(parts))
+
+def validate_number_size(n, max_digits=100000):
+    """التحقق من أن العدد ليس كبيراً جداً"""
+    n_str = str(abs(n))
+    if len(n_str) > max_digits:
+        raise ValueError(f"العدد كبير جداً! الحد الأقصى المسموح: {max_digits} رقم")
+    return n
 
 # ------ أصفار زيتا (قيم تقريبية) - مكبرة
 RIEMANN_ZEROS = [
@@ -193,24 +251,30 @@ def zeta_zero_advanced(n, method="auto", precise=True):
     
     return result if precise else round(result, 4)
 
-# ===================== خدمات جديدة متقدمة =====================
+# ===================== خدمات جديدة متقدمة مع دعم الأعداد الكبيرة =====================
 
-def mersenne_primes_between(n1, n2):
-    """
-    إرجاع قائمة أعداد ميرسين الأولية بين n1 و n2
-    عدد ميرسين: 2^p - 1 حيث p عدد أولي
-    """
+def mersenne_primes_between(n1, n2, max_results=50):
+    """إرجاع قائمة أعداد ميرسين الأولية بين n1 و n2"""
     results = []
     p = 2
-    while True:
-        mersenne = 2**p - 1
-        if mersenne > n2:
+    count = 0
+    
+    while count < max_results:
+        try:
+            mersenne = 2**p - 1
+            if mersenne > n2:
+                break
+            if mersenne >= n1 and is_prime_fast(p):
+                # التحقق من أن ميرسين أولي (بتقييد الحجم)
+                if mersenne < 10**1000 and is_prime_fast(mersenne):
+                    results.append((p, mersenne))
+                    count += 1
+            p = next_prime(p)
+            if 2**p - 1 > n2 or p > 10000:  # حد أقصى لـ p
+                break
+        except:
             break
-        if mersenne >= n1 and is_prime_fast(p) and is_prime_fast(mersenne):
-            results.append((p, mersenne))
-        p = next_prime(p)
-        if 2**p - 1 > n2:
-            break
+    
     return results
 
 def next_prime(n):
@@ -218,24 +282,30 @@ def next_prime(n):
     n += 1
     while not is_prime_fast(n):
         n += 1
+        # حد أمان لتجنب الحلقات اللانهائية
+        if n > 10**10:
+            raise ValueError("العدد كبير جداً للبحث عن العدد الأولي التالي")
     return n
 
-def goldbach_pairs_between(n1, n2):
-    """
-    إرجاع جميع أزواج غولدباخ للأعداد الزوجية بين n1 و n2
-    """
+def goldbach_pairs_between(n1, n2, max_pairs=100):
+    """إرجاع أزواج غولدباخ مع دعم الأعداد الكبيرة"""
     results = []
+    count = 0
+    
     for n in range(n1, n2 + 1):
-        if n % 2 == 0 and n >= 4:
+        if n % 2 == 0 and n >= 4 and count < max_pairs:
             verified, primes = goldbach_verification(n)
             if verified:
                 results.append((n, primes))
+                count += 1
     return results
 
-def primes_between(n1, n2):
-    """إرجاع جميع الأعداد الأولية بين n1 و n2"""
+def primes_between(n1, n2, max_primes=1000):
+    """إرجاع الأعداد الأولية بين n1 و n2 مع حد أقصى"""
     primes = []
     for num in range(max(2, n1), n2 + 1):
+        if len(primes) >= max_primes:
+            break
         if is_prime_fast(num):
             primes.append(num)
     return primes
@@ -387,121 +457,173 @@ def zeta_approx(s, terms=100):
     else:
         return (2 ** s) * (math.pi ** (s - 1)) * math.sin(math.pi * s / 2) * math.gamma(1 - s) * zeta_approx(1 - s, terms)
 
-# ===================== تحسينات سرعة التحليل =====================
+# ===================== تحسينات سرعة التحليل مع دعم الأعداد الكبيرة =====================
 
 @lru_cache(maxsize=10000)
 def is_prime_fast(n: int) -> bool:
-    """نسخة محسنة وسريعة من التحقق من الأعداد الأولية"""
-    n = int(n)
-    if n < 2: return False
-    if n in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29): return True
-    if n % 2 == 0: return False
+    """نسخة محسنة وسريعة من التحقق من الأعداد الأولية مع دعم الأعداد الكبيرة"""
+    try:
+        n = mpz(n) if GMPY2_AVAILABLE else int(n)
+    except:
+        n = int(n)
     
+    if n < 2: 
+        return False
+    if n in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29): 
+        return True
+    if n % 2 == 0: 
+        return False
+    
+    # استخدام المكتبات المتقدمة للأعداد الكبيرة
+    if GMPY2_AVAILABLE and n > 10**6:
+        try:
+            return bool(gmpy2.is_prime(n))
+        except:
+            pass
+    
+    if SYMPY_AVAILABLE and n > 10**8:
+        try:
+            return bool(sympy.isprime(n))
+        except:
+            pass
+    
+    # فحص القواسم الصغيرة أولاً
     small_primes = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]
     for p in small_primes:
         if n % p == 0:
             return n == p
     
-    if GMPY2_AVAILABLE:
-        try: return bool(gmpy2.is_prime(mpz(n)))
-        except: pass
-    if SYMPY_AVAILABLE:
-        try: return bool(sympy.isprime(n))
-        except: pass
-    
+    # اختبار Miller-Rabin للأعداد الكبيرة
     d, s = n - 1, 0
-    while d % 2 == 0: d //= 2; s += 1
+    while d % 2 == 0: 
+        d //= 2
+        s += 1
     
-    bases = [2, 325, 9375, 28178, 450775, 9780504, 1795265022] if n > 10**12 else [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+    def check_composite(a):
+        x = pow(a, d, n)
+        if x == 1 or x == n - 1:
+            return False
+        for _ in range(s - 1):
+            x = (x * x) % n
+            if x == n - 1:
+                return False
+        return True
+    
+    # قواعد أكثر تحفظاً للأعداد الكبيرة
+    if n < 2**64:
+        bases = [2, 325, 9375, 28178, 450775, 9780504, 1795265022]
+    else:
+        bases = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
     
     for a in bases:
         if a % n == 0:
             continue
-        x = pow(a, d, n)
-        if x in (1, n - 1):
-            continue
-        for _ in range(s - 1):
-            x = (x * x) % n
-            if x == n - 1:
-                break
-        else:
+        if check_composite(a):
             return False
+    
     return True
 
-def factorize_fast(n: int, timeout=None, verbose=True):
-    """نسخة محسنة وسريعة للتحليل إلى عوامل أولية"""
-    n = int(n)
+def factorize_fast(n: int, timeout=30, verbose=True):
+    """نسخة محسنة للتحليل إلى عوامل أولية مع دعم الأعداد الكبيرة"""
+    try:
+        n = mpz(n) if GMPY2_AVAILABLE else int(n)
+    except:
+        n = int(n)
+    
     if n < 2:
         return []
-    if is_prime_fast(n):
-        return [n]
     
-    factors = []
-    start_time = time.time()
-    
-    while n % 2 == 0:
-        factors.append(2)
-        n //= 2
-    
-    small_primes = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97]
-    for p in small_primes:
-        while n % p == 0:
-            factors.append(p)
-            n //= p
-        if n == 1:
-            return sorted(factors)
-    
-    if is_prime_fast(n):
-        factors.append(n)
-        return sorted(factors)
-    
-    if SYMPY_AVAILABLE:
+    # استخدام المكتبات المتقدمة للأعداد الكبيرة
+    if SYMPY_AVAILABLE and n > 10**15:
         try:
-            sympy_factors = sympy.factorint(n)
-            for prime, exp in sympy_factors.items():
+            factors_dict = sympy.factorint(n)
+            factors = []
+            for prime, exp in factors_dict.items():
                 factors.extend([int(prime)] * int(exp))
             return sorted(factors)
         except:
             pass
     
-    def pollard_rho_optimized(m, timeout_time):
-        if m % 2 == 0: return 2
-        if m % 3 == 0: return 3
+    if is_prime_fast(n):
+        return [int(n)]
+    
+    factors = []
+    start_time = time.time()
+    
+    # إزالة عوامل 2
+    while n % 2 == 0:
+        factors.append(2)
+        n //= 2
+        if time.time() - start_time > timeout:
+            factors.append(int(n))
+            return sorted(factors)
+    
+    # فحص الأعداد الأولية الصغيرة
+    small_primes = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97]
+    for p in small_primes:
+        while n % p == 0:
+            factors.append(p)
+            n //= p
+            if time.time() - start_time > timeout:
+                factors.append(int(n))
+                return sorted(factors)
+        if n == 1:
+            return sorted(factors)
+    
+    if is_prime_fast(n):
+        factors.append(int(n))
+        return sorted(factors)
+    
+    # خوارزمية Pollard's Rho محسنة
+    def pollard_rho(n, timeout_time):
+        if n == 1:
+            return None
+        if n % 2 == 0:
+            return 2
+        if n % 3 == 0:
+            return 3
         
-        x = random.randint(2, m-2)
+        x = random.randint(2, min(n-2, 10**6))
         y = x
-        c = random.randint(1, m-1)
+        c = random.randint(1, min(n-1, 10**6))
         d = 1
         
+        f = lambda x: (x * x + c) % n
+        
         while d == 1:
-            if timeout_time and time.time() > timeout_time:
+            if time.time() > timeout_time:
                 return None
-            x = (x * x + c) % m
-            y = (y * y + c) % m
-            y = (y * y + c) % m
-            d = math.gcd(abs(x - y), m)
-            if d == m:
+            x = f(x)
+            y = f(f(y))
+            d = math.gcd(abs(x - y), n)
+            if d == n:
                 break
-        return d if 1 < d < m else None
+        
+        return d if 1 < d < n else None
     
-    timeout_time = start_time + timeout if timeout else None
+    timeout_time = start_time + timeout
     remaining = n
     
     while remaining > 1 and not is_prime_fast(remaining):
-        if timeout_time and time.time() > timeout_time:
-            factors.append(remaining)
+        if time.time() > timeout_time:
+            factors.append(int(remaining))
             break
         
-        factor = pollard_rho_optimized(remaining, timeout_time)
+        factor = pollard_rho(remaining, timeout_time)
         if factor is None:
-            factors.append(remaining)
+            factors.append(int(remaining))
             break
         
-        factors.extend(factorize_fast(factor, timeout, verbose))
+        if is_prime_fast(factor):
+            factors.append(int(factor))
+        else:
+            sub_factors = factorize_fast(factor, timeout - (time.time() - start_time), verbose)
+            factors.extend(sub_factors)
+        
         remaining //= factor
     
     if remaining > 1:
-        factors.append(remaining)
+        factors.append(int(remaining))
     
     return sorted(factors)
 
@@ -597,20 +719,31 @@ def zetazero(n:int, precise=True, method="auto"):
     return zeta_zero_advanced(n, method=method, precise=precise)
 
 def goldbach_verification(n, limit=10000):
-    """التحقق من حدسية غولدباخ"""
+    """التحقق من حدسية غولدباخ مع تحسينات للأعداد الكبيرة"""
     if n % 2 != 0 or n < 4:
         return False, []
-    for i in range(2, min(n, limit)):
-        if is_prime_fast(i) and is_prime_fast(n - i):
-            return True, [i, n - i]
-    return False, []
+    
+    # للأعداد الكبيرة، نتحقق من بعض الأزواج فقط
+    if n > 10**6:
+        # اختيار عشوائي لبعض الأزواج المحتملة
+        for _ in range(min(1000, limit)):
+            i = random.randint(2, n//2)
+            if is_prime_fast(i) and is_prime_fast(n - i):
+                return True, [i, n - i]
+        return False, []
+    else:
+        # للأعداد الصغيرة، فحص منهجي
+        for i in range(2, min(n, limit)):
+            if is_prime_fast(i) and is_prime_fast(n - i):
+                return True, [i, n - i]
+        return False, []
 
 def is_semi_prime(n:int):
     """التحقق إذا كان العدد شبه أولي"""
     factors = factorize_fast(n, timeout=5, verbose=False)
     return len(factors) == 2
 
-# ===================== واجهة Streamlit =====================
+# ===================== واجهة Streamlit المحسنة =====================
 
 def main():
     # ترويسة التطبيق
@@ -629,28 +762,45 @@ def main():
         text-align: center;
         margin-bottom: 3rem;
     }
-    .service-card {
-        background-color: #F8F9FA;
-        padding: 2rem;
+    .number-input {
+        font-size: 1.2rem;
+    }
+    .result-box {
+        background-color: #f0f8ff;
+        padding: 20px;
         border-radius: 10px;
         border-left: 5px solid #2E86AB;
-        margin-bottom: 1rem;
+        margin: 10px 0;
+    }
+    .warning-box {
+        background-color: #fff3cd;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ffc107;
+        margin: 10px 0;
     }
     </style>
     """, unsafe_allow_html=True)
     
     st.markdown('<h1 class="main-header">🔢 PPFO v24.0</h1>', unsafe_allow_html=True)
-    st.markdown('<h2 class="sub-header">النسخة المحسنة مع خدمات جديدة وتحسينات السرعة</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="sub-header">النسخة المحسنة مع دعم الأعداد الكبيرة جداً</h2>', unsafe_allow_html=True)
     
     # معلومات النظام
-    with st.expander("معلومات النظام", expanded=False):
+    with st.expander("معلومات النظام والإعدادات", expanded=False):
         col1, col2, col3 = st.columns(3)
         with col1:
             st.info(f"**Sympy:** {'✅ متوفر' if SYMPY_AVAILABLE else '❌ غير متوفر'}")
         with col2:
             st.info(f"**GMPY2:** {'✅ متوفر' if GMPY2_AVAILABLE else '❌ غير متوفر'}")
         with col3:
-            st.info("**الإصدار:** 24.0")
+            st.info("**دعم الأعداد الكبيرة:** ✅ ممتاز")
+        
+        st.warning("""
+        **ملاحظات هامة:**
+        - يمكن إدخال الأعداد بتنسيقات مختلفة: `123,456,789` أو `1.23e8` أو `2^100`
+        - الحد الأقصى للتحليل: 100,000 رقم
+        - استخدم الترميز العلمي للأعداد الكبيرة جداً
+        """)
     
     # شريط جانبي للتنقل
     st.sidebar.title("🧭 التنقل")
@@ -658,13 +808,15 @@ def main():
         "اختر الخدمة:",
         [
             "التحليل إلى عوامل أولية",
-            "أعداد ميرسين الأولية", 
+            "التحقق من الأعداد الأولية", 
+            "أعداد ميرسين الأولية",
             "حدسية غولدباخ",
             "الأعداد الأولية في نطاق",
             "متسلسلة تايلور",
             "الدوال المتقدمة",
             "تقدير الأعداد الأولية",
-            "أصفار دالة زيتا"
+            "أصفار دالة زيتا",
+            "أدوات الأعداد الكبيرة"
         ]
     )
     
@@ -672,50 +824,122 @@ def main():
     if service == "التحليل إلى عوامل أولية":
         st.header("🔍 التحليل إلى عوامل أولية")
         
+        st.info("""
+        **يمكنك إدخال الأعداد بالتنسيقات التالية:**
+        - `123456789`
+        - `123,456,789` 
+        - `1.23456789e8`
+        - `2^50` أو `2**50`
+        """)
+        
         col1, col2 = st.columns([2, 1])
         with col1:
-            number = st.number_input("أدخل العدد للتحليل:", min_value=2, value=100, step=1)
+            number_input = st.text_input("أدخل العدد للتحليل:", value="123456789", key="factorize_input")
         with col2:
             timeout = st.number_input("المهلة (بالثواني):", min_value=1, value=30, step=1)
         
-        if st.button("تحليل العدد", type="primary"):
-            with st.spinner("جاري التحليل..."):
-                start_time = time.time()
-                factors = factorize_fast(number, timeout=timeout, verbose=False)
-                end_time = time.time()
+        if st.button("تحليل العدد", type="primary", key="factorize_btn"):
+            try:
+                # تحليل العدد المدخل
+                number = parse_large_number(number_input)
+                number = validate_number_size(number, max_digits=100000)
                 
-                if len(factors) == 1:
-                    st.success(f"**{number} هو عدد أولي**")
-                else:
-                    cnt = Counter(factors)
-                    parts_str = [f"{p}<sup>{cnt[p]}</sup>" if cnt[p] > 1 else f"{p}" for p in sorted(cnt)]
-                    factorization = " × ".join(parts_str)
+                st.success(f"**تم تحليل العدد المدخل:** {format_large_number(number)}")
+                st.info(f"**عدد الأرقام:** {len(str(number))} رقم")
+                
+                with st.spinner("جاري التحليل... قد يستغرق هذا بعض الوقت للأعداد الكبيرة"):
+                    start_time = time.time()
+                    factors = factorize_fast(number, timeout=timeout, verbose=False)
+                    end_time = time.time()
                     
-                    st.success(f"**التحليل:** {number} = {factorization}")
-                    st.info(f"**العوامل المفردة:** {factors}")
+                    if len(factors) == 1:
+                        st.success("🎉 **النتيجة: العدد أولي**")
+                        st.balloons()
+                    else:
+                        cnt = Counter(factors)
+                        parts_str = []
+                        for p in sorted(cnt):
+                            if cnt[p] > 1:
+                                parts_str.append(f"{p}<sup>{cnt[p]}</sup>")
+                            else:
+                                parts_str.append(f"{p}")
+                        factorization = " × ".join(parts_str)
+                        
+                        st.success(f"**التحليل:** {format_large_number(number)} = {factorization}")
+                        
+                        # عرض معلومات إضافية
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.info(f"**عدد العوامل:** {len(factors)}")
+                        with col2:
+                            st.info(f"**العوامل المميزة:** {len(cnt)}")
+                    
+                    st.metric("الوقت المستغرق", f"{end_time - start_time:.3f} ثانية")
+                    
+            except Exception as e:
+                st.error(f"❌ خطأ: {e}")
+    
+    # قسم التحقق من الأعداد الأولية
+    elif service == "التحقق من الأعداد الأولية":
+        st.header("🔍 التحقق من الأعداد الأولية")
+        
+        number_input = st.text_input("أدخل العدد للتحقق:", value="1000000007", key="isprime_input")
+        
+        if st.button("التحقق من العدد الأولي", type="primary"):
+            try:
+                number = parse_large_number(number_input)
+                number = validate_number_size(number, max_digits=100000)
                 
-                st.metric("الوقت المستغرق", f"{end_time - start_time:.3f} ثانية")
+                st.info(f"**العدد المدخل:** {format_large_number(number)}")
+                st.info(f"**عدد الأرقام:** {len(str(number))} رقم")
+                
+                with st.spinner("جاري التحقق..."):
+                    start_time = time.time()
+                    is_prime = is_prime_fast(number)
+                    end_time = time.time()
+                    
+                    if is_prime:
+                        st.success("🎉 **النتيجة: العدد أولي**")
+                        st.balloons()
+                    else:
+                        st.error("❌ **النتيجة: العدد غير أولي**")
+                    
+                    st.metric("الوقت المستغرق", f"{end_time - start_time:.3f} ثانية")
+                    
+            except Exception as e:
+                st.error(f"❌ خطأ: {e}")
     
     # قسم أعداد ميرسين الأولية
     elif service == "أعداد ميرسين الأولية":
         st.header("🔢 أعداد ميرسين الأولية")
         
+        st.warning("ملاحظة: البحث عن أعداد ميرسين كبير جداً قد يستغرق وقتاً طويلاً")
+        
         col1, col2 = st.columns(2)
         with col1:
-            n1 = st.number_input("الحد الأدنى:", min_value=2, value=3, step=1)
+            n1_input = st.text_input("الحد الأدنى:", value="3", key="mersenne_n1")
         with col2:
-            n2 = st.number_input("الحد الأعلى:", min_value=2, value=1000, step=1)
+            n2_input = st.text_input("الحد الأعلى:", value="1000", key="mersenne_n2")
         
         if st.button("إيجاد أعداد ميرسين", type="primary"):
-            with st.spinner("جاري البحث عن أعداد ميرسين الأولية..."):
-                results = mersenne_primes_between(n1, n2)
+            try:
+                n1 = parse_large_number(n1_input)
+                n2 = parse_large_number(n2_input)
                 
-                if results:
-                    st.success(f"تم العثور على {len(results)} عدد ميرسين أولي")
-                    for p, m in results:
-                        st.write(f"**2^{p} - 1 = {m}**")
-                else:
-                    st.warning("لم يتم العثور على أعداد ميرسين أولية في هذا النطاق")
+                with st.spinner("جاري البحث عن أعداد ميرسين الأولية..."):
+                    results = mersenne_primes_between(n1, n2)
+                    
+                    if results:
+                        st.success(f"تم العثور على {len(results)} عدد ميرسين أولي")
+                        for p, m in results:
+                            with st.expander(f"M{format_large_number(p)}: 2^{p} - 1"):
+                                st.write(f"**العدد:** {format_large_number(m)}")
+                                st.write(f"**عدد الأرقام:** {len(str(m))} رقم")
+                    else:
+                        st.warning("لم يتم العثور على أعداد ميرسين أولية في هذا النطاق")
+                        
+            except Exception as e:
+                st.error(f"❌ خطأ: {e}")
     
     # قسم حدسية غولدباخ
     elif service == "حدسية غولدباخ":
@@ -723,23 +947,33 @@ def main():
         
         col1, col2 = st.columns(2)
         with col1:
-            n1 = st.number_input("الحد الأدنى (زوجي):", min_value=4, value=4, step=2)
+            n1_input = st.text_input("الحد الأدنى (زوجي):", value="4", key="goldbach_n1")
         with col2:
-            n2 = st.number_input("الحد الأعلى (زوجي):", min_value=4, value=100, step=2)
+            n2_input = st.text_input("الحد الأعلى (زوجي):", value="100", key="goldbach_n2")
         
         if st.button("إيجاد أزواج غولدباخ", type="primary"):
-            with st.spinner("جاري البحث عن أزواج غولدباخ..."):
-                results = goldbach_pairs_between(n1, n2)
+            try:
+                n1 = parse_large_number(n1_input)
+                n2 = parse_large_number(n2_input)
                 
-                if results:
-                    st.success(f"تم العثور على {len(results)} عدد زوجي يمكن تحليله")
-                    for n, primes in results[:20]:  # عرض أول 20 نتيجة فقط
-                        st.write(f"**{n} = {primes[0]} + {primes[1]}**")
-                    
-                    if len(results) > 20:
-                        st.info(f"عرض {20} من أصل {len(results)} نتيجة. استخدم نطاق أصفر لعرض جميع النتائج.")
+                if n1 % 2 != 0 or n2 % 2 != 0:
+                    st.warning("الرجاء إدخال أعداد زوجية")
                 else:
-                    st.warning("لم يتم العثور على أزواج غولدباخ في هذا النطاق")
+                    with st.spinner("جاري البحث عن أزواج غولدباخ..."):
+                        results = goldbach_pairs_between(n1, n2)
+                        
+                        if results:
+                            st.success(f"تم العثور على {len(results)} عدد زوجي يمكن تحليله")
+                            for n, primes in results[:20]:  # عرض أول 20 نتيجة فقط
+                                st.write(f"**{format_large_number(n)} = {format_large_number(primes[0])} + {format_large_number(primes[1])}**")
+                            
+                            if len(results) > 20:
+                                st.info(f"عرض {20} من أصل {len(results)} نتيجة. استخدم نطاق أصغر لعرض جميع النتائج.")
+                        else:
+                            st.warning("لم يتم العثور على أزواج غولدباخ في هذا النطاق")
+                            
+            except Exception as e:
+                st.error(f"❌ خطأ: {e}")
     
     # قسم الأعداد الأولية في نطاق
     elif service == "الأعداد الأولية في نطاق":
@@ -747,24 +981,100 @@ def main():
         
         col1, col2 = st.columns(2)
         with col1:
-            n1 = st.number_input("الحد الأدنى:", min_value=2, value=1, step=1)
+            n1_input = st.text_input("الحد الأدنى:", value="1", key="primes_n1")
         with col2:
-            n2 = st.number_input("الحد الأعلى:", min_value=2, value=100, step=1)
+            n2_input = st.text_input("الحد الأعلى:", value="100", key="primes_n2")
         
         if st.button("إيجاد الأعداد الأولية", type="primary"):
-            with st.spinner("جاري البحث عن الأعداد الأولية..."):
-                primes_list = primes_between(n1, n2)
+            try:
+                n1 = parse_large_number(n1_input)
+                n2 = parse_large_number(n2_input)
                 
-                if primes_list:
-                    st.success(f"تم العثور على {len(primes_list)} عدد أولي")
+                if n2 - n1 > 100000:
+                    st.warning("النطاق كبير جداً، سيتم عرض أول 1000 عدد أولي فقط")
+                
+                with st.spinner("جاري البحث عن الأعداد الأولية..."):
+                    primes_list = primes_between(n1, n2)
                     
-                    # عرض الأعداد الأولية في أعمدة
-                    cols = st.columns(5)
-                    for i, prime in enumerate(primes_list):
-                        with cols[i % 5]:
-                            st.write(f"**{prime}**")
-                else:
-                    st.warning("لم يتم العثور على أعداد أولية في هذا النطاق")
+                    if primes_list:
+                        st.success(f"تم العثور على {len(primes_list)} عدد أولي")
+                        
+                        # عرض الأعداد الأولية في أعمدة
+                        if len(primes_list) <= 100:
+                            cols = st.columns(5)
+                            for i, prime in enumerate(primes_list):
+                                with cols[i % 5]:
+                                    st.write(f"**{format_large_number(prime)}**")
+                        else:
+                            st.info(f"عرض أول 100 عدد أولي من أصل {len(primes_list)}:")
+                            cols = st.columns(5)
+                            for i, prime in enumerate(primes_list[:100]):
+                                with cols[i % 5]:
+                                    st.write(f"**{format_large_number(prime)}**")
+                    else:
+                        st.warning("لم يتم العثور على أعداد أولية في هذا النطاق")
+                        
+            except Exception as e:
+                st.error(f"❌ خطأ: {e}")
+    
+    # قسم أدوات الأعداد الكبيرة
+    elif service == "أدوات الأعداد الكبيرة":
+        st.header("🛠️ أدوات الأعداد الكبيرة")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("تحويل الترميز")
+            input_num = st.text_input("أدخل العدد:", value="123456789", key="convert_input")
+            
+            if st.button("تحويل", key="convert_btn"):
+                try:
+                    number = parse_large_number(input_num)
+                    
+                    st.success("**نتائج التحويل:**")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.info(f"**عشري:** {format_large_number(number)}")
+                    with col2:
+                        st.info(f"**علمي:** {number:.2e}")
+                    with col3:
+                        st.info(f"**الأرقام:** {len(str(number))}")
+                        
+                except Exception as e:
+                    st.error(f"❌ خطأ: {e}")
+        
+        with col2:
+            st.subheader("عمليات الأعداد الكبيرة")
+            num1 = st.text_input("العدد الأول:", value="1000000007", key="big_num1")
+            num2 = st.text_input("العدد الثاني:", value="1000000009", key="big_num2")
+            
+            op = st.selectbox("العملية:", ["GCD", "ضرب", "قوة"])
+            
+            if st.button("احسب", key="calc_btn"):
+                try:
+                    n1 = parse_large_number(num1)
+                    n2 = parse_large_number(num2)
+                    
+                    if op == "GCD":
+                        result = math.gcd(n1, n2)
+                        st.success(f"**GCD({format_large_number(n1)}, {format_large_number(n2)}) = {format_large_number(result)}**")
+                    elif op == "ضرب":
+                        result = n1 * n2
+                        st.success(f"**{format_large_number(n1)} × {format_large_number(n2)} = {format_large_number(result)}**")
+                    elif op == "قوة":
+                        # للقوى الكبيرة، نستخدم الترميز العلمي
+                        if n2 > 100:
+                            result = n1 ** n2
+                            st.success(f"**{format_large_number(n1)}^{n2} ≈ {format_large_number(result)}**")
+                        else:
+                            result = n1 ** n2
+                            st.success(f"**{format_large_number(n1)}^{n2} = {format_large_number(result)}**")
+                            
+                except Exception as e:
+                    st.error(f"❌ خطأ: {e}")
+    
+    # باقي الأقسام (متسلسلة تايلور، الدوال المتقدمة، تقدير الأعداد الأولية، أصفار دالة زيتا)
+    # تبقى كما هي مع تعديلات طفيفة...
     
     # قسم متسلسلة تايلور
     elif service == "متسلسلة تايلور":
@@ -794,7 +1104,7 @@ def main():
                     st.info(f"**الفرق:** {abs(result - exact):.2e}")
                 
             except Exception as e:
-                st.error(f"خطأ: {e}")
+                st.error(f"❌ خطأ: {e}")
     
     # قسم الدوال المتقدمة
     elif service == "الدوال المتقدمة":
@@ -814,30 +1124,24 @@ def main():
                 result = advanced_functions(func_name, x)
                 st.success(f"**{func_name}({x}) ≈ {result:.10f}**")
             except Exception as e:
-                st.error(f"خطأ: {e}")
+                st.error(f"❌ خطأ: {e}")
     
     # قسم تقدير الأعداد الأولية
     elif service == "تقدير الأعداد الأولية":
         st.header("📊 تقدير الأعداد الأولية")
         
-        n = st.number_input("المرتبة n:", min_value=1, value=100, step=1)
+        n_input = st.text_input("المرتبة n:", value="100", key="nth_prime_input")
         
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("تقدير كرامر", type="primary"):
-                estimate = prime_nth_estimate_advanced(n, method="cramer")
-                st.success(f"**p_{n} ≈ {estimate}**")
-        
-        with col2:
-            if st.button("تقدير دوزار", type="primary"):
-                estimate = prime_nth_estimate_advanced(n, method="dusart")
-                st.success(f"**p_{n} ≈ {estimate}**")
-        
-        with col3:
-            if st.button("تقدير أكسلر", type="primary"):
+        if st.button("تقدير العدد الأولي", type="primary"):
+            try:
+                n = parse_large_number(n_input)
+                n = validate_number_size(n, max_digits=6)  # n صغير نسبياً
+                
                 estimate = prime_nth_estimate_advanced(n, method="axler")
-                st.success(f"**p_{n} ≈ {estimate}**")
+                st.success(f"**p_{format_large_number(n)} ≈ {format_large_number(estimate)}**")
+                
+            except Exception as e:
+                st.error(f"❌ خطأ: {e}")
     
     # قسم أصفار دالة زيتا
     elif service == "أصفار دالة زيتا":
@@ -853,7 +1157,7 @@ def main():
                     zero = zetazero(n)
                     st.success(f"**الصفر غير التافه رقم {n} ≈ {zero:.10f}**")
                 except Exception as e:
-                    st.error(f"خطأ: {e}")
+                    st.error(f"❌ خطأ: {e}")
         
         with col2:
             if st.button("عرض معلومات", type="secondary"):
@@ -863,15 +1167,13 @@ def main():
     
     # معلومات إضافية في الشريط الجانبي
     st.sidebar.markdown("---")
-    st.sidebar.header("ℹ️ معلومات")
+    st.sidebar.header("ℹ️ معلومات الأعداد الكبيرة")
     st.sidebar.info("""
-    **PPFO v24.0** يحتوي على:
-    - تحليل سريع للعوامل الأولية
-    - أعداد ميرسين الأولية
-    - حدسية غولدباخ
-    - متسلسلة تايلور
-    - دوال رياضية متقدمة
-    - أصفار دالة زيتا
+    **التنسيقات المدعومة:**
+    - `123,456,789` (بفوارص)
+    - `1.23e8` (ترميز علمي)  
+    - `2^50` أو `2**50` (قوى)
+    - `123456789` (عادي)
     """)
     
     st.sidebar.header("⚙️ الإعدادات")
