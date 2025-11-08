@@ -3,14 +3,18 @@
 
 """
 PPFO v18.1 — تطبيق الويب الرياضي الكامل لأصفار زيتا مع تحويل تلقائي عند الفشل
-نسخة Streamlit التفاعلية
+نسخة Streamlit التفاعلية المحسنة
 """
 
-import math, random, threading, time, re, sys, os, json
-import streamlit as st
+import math
+import random
+import threading
+import time
+import re
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import streamlit as st
 from collections import Counter, defaultdict
 from functools import lru_cache
 from datetime import datetime
@@ -31,6 +35,7 @@ st.markdown("""
         color: #1f77b4;
         text-align: center;
         margin-bottom: 2rem;
+        font-weight: bold;
     }
     .success-box {
         background-color: #d4edda;
@@ -42,6 +47,13 @@ st.markdown("""
     .warning-box {
         background-color: #fff3cd;
         border: 1px solid #ffeaa7;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    .info-box {
+        background-color: #d1ecf1;
+        border: 1px solid #bee5eb;
         border-radius: 0.5rem;
         padding: 1rem;
         margin: 1rem 0;
@@ -61,15 +73,32 @@ st.markdown("""
         font-weight: bold;
         margin: 0.1rem;
     }
+    .riemann-badge { background-color: #e83e8c; color: white; }
+    .ecm-badge { background-color: #20c997; color: white; }
+    .small-badge { background-color: #6f42c1; color: white; }
+    .hybrid-badge { background-color: #fd7e14; color: white; }
+    .emergency-badge { background-color: #dc3545; color: white; }
+    
+    /* تخصيص Streamlit */
+    .stProgress > div > div > div > div {
+        background-color: #1f77b4;
+    }
+    .st-bb {
+        background-color: transparent;
+    }
+    .st-at {
+        background-color: #1f77b4;
+    }
 </style>
 """, unsafe_allow_html=True)
 
+# فحص المكتبات
 try:
     import sympy
     SYMPY_AVAILABLE = True
 except ImportError:
     SYMPY_AVAILABLE = False
-    st.warning("ملاحظة: sympy غير متوفر. سيتم استخدام خوارزميات أولية بديلة.")
+    st.warning("⚠️ **ملاحظة:** sympy غير متوفر. سيتم استخدام خوارزميات أولية بديلة.")
 
 try:
     import gmpy2
@@ -78,7 +107,7 @@ try:
 except ImportError:
     GMPY2_AVAILABLE = False
     mpz = int
-    st.warning("ملاحظة: gmpy2 غير متوفر. سيتم استخدام تطبيقات أولية.")
+    st.warning("⚠️ **ملاحظة:** gmpy2 غير متوفر. سيتم استخدام تطبيقات أولية.")
 
 # ========== دوال رياضية أساسية ==========
 @lru_cache(maxsize=1000)
@@ -103,7 +132,7 @@ def is_prime_fast(n):
         d //= 2
         s += 1
     for a in [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41]:
-        if a % n == 0:
+        if a >= n:
             continue
         x = pow(a, d, n)
         if x in (1, n-1):
@@ -137,6 +166,10 @@ def is_perfect_power(n):
         root = int(round(n ** (1/k)))
         if root ** k == n:
             return True, root, k
+        if (root + 1) ** k == n:
+            return True, root + 1, k
+        if (root - 1) ** k == n:
+            return True, root - 1, k
     return False, None, None
 
 # ========== الإطار الرياضي لأصفار زيتا ==========
@@ -171,7 +204,7 @@ def estimate_factor_size_riemann(n):
     
     expected_bits = bit_len / 2
     correction = 0
-    log_n = math.log(n)
+    log_n = math.log(max(n, 2))
     weight_sum = 0
     
     for i, gamma in enumerate(RIEMANN_ZEROS[:5]):
@@ -293,6 +326,37 @@ def prime_sieve(limit):
             sieve[i*i:limit+1:i] = b'\x00' * ((limit - i*i)//i + 1)
     return [i for i, is_prime in enumerate(sieve) if is_prime]
 
+def elliptic_double(x, z, A, n):
+    """ضعف نقطة على منحنى مونتغمري"""
+    if z == 0:
+        return x, z
+    
+    t1 = (x - z) % n
+    t2 = (x + z) % n
+    t1 = (t1 * t1) % n
+    t2 = (t2 * t2) % n
+    t3 = (t2 - t1) % n
+    new_x = (t1 * t2) % n
+    new_z = (t3 * ((A + 2) * t1 + A * t3)) % n
+    return new_x, new_z
+
+def elliptic_add(x1, z1, x2, z2, x0, z0, n):
+    """جمع نقطتين على منحنى مونتغمري"""
+    if z1 == 0:
+        return x2, z2
+    if z2 == 0:
+        return x1, z1
+    
+    t1 = (x1 - z1) * (x2 + z2) % n
+    t2 = (x1 + z1) * (x2 - z2) % n
+    t3 = (t1 + t2) % n
+    t4 = (t1 - t2) % n
+    t5 = t3 * t3 % n
+    t6 = t4 * t4 % n
+    new_x = (x0 * t5) % n
+    new_z = (z0 * t6) % n
+    return new_x, new_z
+
 def mathematically_optimized_ecm(n, curves=50):
     """ECM محسّن رياضياً باستخدام نظرية المنحنيات الإهليلجية"""
     if n % 2 == 0:
@@ -345,22 +409,35 @@ def mathematically_optimized_ecm(n, curves=50):
         g = gcd(Qz, n)
         if 1 < g < n:
             return g
+        
+        # مرحلة 2 مبسطة
+        if B2 > B1 and Qz != 0:
+            Sx, Sz = elliptic_double(Qx, Qz, A, n)
+            prime_differences = []
+            current = B1 + 1
+            while current <= B2 and len(prime_differences) < 500:
+                if is_prime_fast(current):
+                    prime_differences.append(current)
+                current += 2
+            
+            T = 100
+            for i in range(0, len(prime_differences), T):
+                block = prime_differences[i:i+T]
+                if not block:
+                    continue
+                
+                Rx, Rz = Qx, Qz
+                for prime in block:
+                    Rx, Rz = elliptic_add(Rx, Rz, Qx, Qz, Sx, Sz, n)
+                    if Rz == 0:
+                        break
+                
+                if Rz != 0:
+                    g = gcd(Rz, n)
+                    if 1 < g < n:
+                        return g
     
     return None
-
-def elliptic_double(x, z, A, n):
-    """ضعف نقطة على منحنى مونتغمري"""
-    if z == 0:
-        return x, z
-    
-    t1 = (x - z) % n
-    t2 = (x + z) % n
-    t1 = (t1 * t1) % n
-    t2 = (t2 * t2) % n
-    t3 = (t2 - t1) % n
-    new_x = (t1 * t2) % n
-    new_z = (t3 * ((A + 2) * t1 + A * t3)) % n
-    return new_x, new_z
 
 def enhanced_pollard_rho_brent(n, max_iter=None):
     """نسخة محسنة من Pollard Rho باستخدام خوارزمية Brent"""
@@ -416,7 +493,119 @@ def enhanced_pollard_rho_brent(n, max_iter=None):
     
     return g if 1 < g < n else None
 
-# ========== إدارة الحالة ==========
+def quadratic_sieve_enhanced(n, factor_base_size=None):
+    """الغربال التربيعي المحسن مع قاعدة أولية مثلى"""
+    if n < 2:
+        return None
+    if is_perfect_power(n)[0]:
+        return is_perfect_power(n)[1]
+    
+    bit_len = n.bit_length()
+    if factor_base_size is None:
+        if bit_len < 60:
+            factor_base_size = 100
+        elif bit_len < 100:
+            factor_base_size = 500
+        else:
+            factor_base_size = 2000
+    
+    factor_base = []
+    p = 2
+    while len(factor_base) < factor_base_size and p < 10000:
+        if is_prime_fast(p) and pow(n, (p-1)//2, p) == 1:
+            factor_base.append(p)
+        p = p + 1 if p == 2 else p + 2
+    
+    smooth_relations = []
+    x = math.isqrt(n) + 1
+    max_relations = len(factor_base) + 10
+    
+    for _ in range(2 * max_relations):
+        y = x*x - n
+        if y > 0:
+            factors = {}
+            temp = y
+            for p in factor_base:
+                while temp % p == 0:
+                    factors[p] = factors.get(p, 0) + 1
+                    temp //= p
+            
+            if temp == 1:
+                smooth_relations.append((x, y, factors))
+                if len(smooth_relations) >= max_relations:
+                    break
+        x += 1
+    
+    if len(smooth_relations) < len(factor_base):
+        return None
+    
+    for i in range(len(smooth_relations)):
+        for j in range(i+1, len(smooth_relations)):
+            x1, y1, f1 = smooth_relations[i]
+            x2, y2, f2 = smooth_relations[j]
+            
+            combined_factors = {}
+            for p, e in f1.items():
+                combined_factors[p] = combined_factors.get(p, 0) + e
+            for p, e in f2.items():
+                combined_factors[p] = combined_factors.get(p, 0) + e
+            
+            if all(e % 2 == 0 for e in combined_factors.values()):
+                x_product = (x1 * x2) % n
+                y_product = 1
+                for p, e in combined_factors.items():
+                    y_product = (y_product * pow(p, e//2, n)) % n
+                
+                factor = gcd(abs(x_product - y_product), n)
+                if 1 < factor < n:
+                    return factor
+    
+    return None
+
+def mathematically_optimized_p1(n, B1=None, B2=None):
+    """Pollard's p-1 محسّن رياضياً"""
+    if n % 2 == 0:
+        return 2
+    if n < 2:
+        return None
+    if is_prime_fast(n):
+        return n
+    
+    bit_len = n.bit_length()
+    if B1 is None:
+        B1 = max(1000, int(2 ** (bit_len * 0.1)))
+    if B2 is None:
+        B2 = B1 * 100
+    
+    a = 2
+    for p in prime_sieve(B1):
+        e = int(math.log(B1) / math.log(p))
+        a = pow(a, pow(p, e), n)
+        g = gcd(a-1, n)
+        if 1 < g < n:
+            return g
+    
+    if B2 > B1:
+        block_size = 1000
+        for start in range(B1, B2, block_size):
+            end = min(start + block_size, B2)
+            block_primes = [p for p in prime_sieve(end) if p >= start]
+            
+            if not block_primes:
+                continue
+            
+            product = 1
+            for p in block_primes:
+                product = (product * p) % n
+            
+            a = pow(a, product, n)
+            g = gcd(a-1, n)
+            if 1 < g < n:
+                return g
+    
+    return None
+
+# ========== إدارة الحالة للويب ==========
 class SharedData:
     def __init__(self, N):
         self.lock = threading.Lock()
@@ -432,6 +621,8 @@ class SharedData:
         self.factorization_path = []
         self.mathematical_insights = []
         self.strategy_history = []
+        self.progress_bar = None
+        self.status_text = None
 
     def consume(self, factor, method):
         with self.lock:
@@ -452,7 +643,6 @@ class SharedData:
             bit_len = factor.bit_length()
             self.mathematical_insights.append(f"عامل {bit_len} بت تم الحصول عليه بواسطة {method}")
             
-            # تحديث إحصائيات العمال
             worker_match = re.search(r'(\w+)-(\d+)', method)
             if worker_match:
                 worker_type, worker_id = worker_match.groups()
@@ -490,45 +680,60 @@ class SharedData:
         }
         self.strategy_history.append(entry)
 
-# ========== واجهة Streamlit ==========
+    def get_progress(self):
+        """حساب التقدم كنسبة مئوية"""
+        if self.remainder == 1:
+            return 100.0
+        try:
+            progress = 100 * (1 - math.log(self.remainder) / math.log(self.N))
+            return max(0, min(100, progress))
+        except:
+            return 0.0
+
+# ========== واجهة Streamlit المحسنة ==========
 def main():
     st.markdown('<div class="main-header">🧮 PPFO v18.1 - الإطار الرياضي الكامل لأصفار زيتا</div>', unsafe_allow_html=True)
     
     # معلومات النظام
-    with st.expander("ℹ️ معلومات النظام والاعتماديات"):
-        col1, col2, col3 = st.columns(3)
+    with st.sidebar:
+        st.header("⚙️ معلومات النظام")
+        col1, col2 = st.columns(2)
         with col1:
-            st.write(f"**SymPy:** {'✅ متوفر' if SYMPY_AVAILABLE else '❌ غير متوفر'}")
+            st.write(f"**SymPy:** {'✅' if SYMPY_AVAILABLE else '❌'}")
+            st.write(f"**GMPY2:** {'✅' if GMPY2_AVAILABLE else '❌'}")
         with col2:
-            st.write(f"**GMPY2:** {'✅ متوفر' if GMPY2_AVAILABLE else '❌ غير متوفر'}")
-        with col3:
             st.write(f"**أصفار زيتا:** {len(RIEMANN_ZEROS)}")
+            st.write(f"**إصدار Streamlit:** 1.35.0")
         
-        st.info("""
-        **ملاحظة رياضية:** لا توجد خوارزمية مثبتة تستخدم أصفار زيتا مباشرة لتحليل الأعداد.
-        يتم استخدام الخصائص الطيفية لأصفار زيتا لتحسين معلمات الخوارزميات العددية.
-        النظام يتحول تلقائياً إلى استراتيجيات مثبتة عند فشل الطرق الموجهة.
+        st.markdown("---")
+        st.markdown("""
+        **ℹ️ ملاحظة رياضية:**
+        - لا توجد خوارزمية مثبتة تستخدم أصفار زيتا مباشرة لتحليل الأعداد
+        - يتم استخدام الخصائص الطيفية لأصفار زيتا لتحسين معلمات الخوارزميات
+        - النظام يتحول تلقائياً إلى استراتيجيات مثبتة عند فشل الطرق الموجهة
         """)
     
     # إدخال الرقم والإعدادات
     col1, col2 = st.columns([2, 1])
     
     with col1:
+        st.subheader("🔢 إدخال العدد")
         input_method = st.radio("طريقة الإدخال:", ["رقم عادي", "رقم سداسي عشري", "تعبير رياضي"])
         
         if input_method == "رقم عادي":
-            N_str = st.text_input("أدخل العدد المراد تحليله:", value="123456789012345678901234567890")
+            default_num = "123456789012345678901234567890"
+            N_str = st.text_input("أدخل العدد المراد تحليله:", value=default_num)
         elif input_method == "رقم سداسي عشري":
-            hex_str = st.text_input("أدخل العدد بصيغة سداسية عشرية:", value="0x1234567890ABCDEF")
-            N_str = hex_str if hex_str.startswith('0x') else f"0x{hex_str}"
+            default_hex = "0x1234567890ABCDEF"
+            hex_str = st.text_input("أدخل العدد بصيغة سداسية عشرية:", value=default_hex)
+            N_str = hex_str
         else:
-            expr = st.text_input("أدخل تعبيراً رياضياً:", value="2**128 + 1")
-            try:
-                N_str = str(eval(expr))
-            except:
-                N_str = "123456789"
+            default_expr = "2**128 + 1"
+            expr = st.text_input("أدخل تعبيراً رياضياً:", value=default_expr)
+            N_str = expr
     
     with col2:
+        st.subheader("📊 معلومات العدد")
         try:
             if input_method == "رقم سداسي عشري":
                 N = int(N_str, 16)
@@ -536,17 +741,23 @@ def main():
                 N = int(eval(N_str) if input_method == "تعبير رياضي" else N_str)
             
             bit_length = N.bit_length()
+            digit_count = len(str(N))
+            
             st.metric("حجم العدد", f"{bit_length} بت")
-            st.metric("عدد الأرقام", f"{len(str(N))}")
+            st.metric("عدد الأرقام", f"{digit_count:,}")
             
             # تحليل أولي
-            if is_prime_fast(N):
-                st.success("العدد أولي")
+            if N < 2:
+                st.error("العدد يجب أن يكون أكبر من 1")
+                return
+            elif is_prime_fast(N):
+                st.success("✅ العدد أولي")
             else:
-                st.info("العدد مركب")
+                st.info("🔢 العدد مركب")
                 
         except Exception as e:
-            st.error(f"خطأ في الإدخال: {e}")
+            st.error(f"❌ خطأ في الإدخال: {e}")
+            # استخدام رقم افتراضي
             N = 123456789012345678901234567890
             bit_length = N.bit_length()
     
@@ -557,22 +768,22 @@ def main():
     
     with col1:
         st.write("**الطرق المطلوبة:**")
-        use_small = st.checkbox("العوامل الصغيرة", value=True)
-        use_riemann = st.checkbox("Riemann-Pollard-Rho", value=True)
-        use_ecm = st.checkbox("المنحنيات الإهليلجية (ECM)", value=True)
-        use_hybrid = st.checkbox("عامل هجين", value=True)
-        use_emergency = st.checkbox("وضع الطوارئ", value=True)
+        use_small = st.checkbox("العوامل الصغيرة", value=True, help="البحث عن عوامل أولية صغيرة (<200)")
+        use_riemann = st.checkbox("Riemann-Pollard-Rho", value=True, help="الإطار الرياضي لأصفار زيتا")
+        use_ecm = st.checkbox("المنحنيات الإهليلجية (ECM)", value=True, help="خوارزمية رياضية متقدمة للعوامل المتوسطة")
     
     with col2:
         st.write("**معلمات الأداء:**")
-        max_threads = st.slider("عدد الخيوط", 1, 24, 8)
-        max_time = st.number_input("الوقت الأقصى (ثواني)", 0, 3600, 300)
-        show_progress = st.checkbox("عرض التقدم التفصيلي", value=True)
+        use_hybrid = st.checkbox("عامل هجين", value=True, help="دمج عدة خوارزميات حسب حجم العدد")
+        use_emergency = st.checkbox("وضع الطوارئ", value=True, help="تفعيل طرق بديلة عند الركود")
+        max_threads = st.slider("عدد الخيوط", 1, 16, 8, help="عدد الخيوط المتوازية للتحليل")
     
     with col3:
         st.write("**خيارات إضافية:**")
-        save_results = st.checkbox("حفظ النتائج", value=False)
+        max_time = st.number_input("الوقت الأقصى (ثواني)", 0, 3600, 300, help="الوقت الأقصى للتشغيل")
+        show_progress = st.checkbox("عرض التقدم التفصيلي", value=True)
         advanced_math = st.checkbox("عرض الرؤى الرياضية", value=True)
+        save_results = st.checkbox("حفظ النتائج", value=False)
     
     # زر البدء
     if st.button("🚀 بدء التحليل", type="primary", use_container_width=True):
@@ -597,27 +808,157 @@ def main():
         }
         
         # بدء التحليل
-        with st.spinner("جاري التحليل..."):
+        with st.spinner("جاري التحليل... قد تستغرق العملية بعض الوقت للأعداد الكبيرة"):
             shared = enhanced_factorize_with_preferences(N, enabled_methods, custom_settings)
         
         # عرض النتائج
-        display_results(N, shared, advanced_math)
+        display_results(N, shared, advanced_math, save_results)
 
-def display_results(N, shared, show_math=True):
-    """عرض النتائج بطريقة تفاعلية"""
+def enhanced_factorize_with_preferences(N, enabled_methods, custom_settings):
+    """نسخة محسنة من التحليل للاستخدام في الويب"""
+    shared = SharedData(N)
     
-    # العنوان والملخص
+    # إنشاء عناصر الواجهة
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    results_placeholder = st.empty()
+    
+    shared.progress_bar = progress_bar
+    shared.status_text = status_text
+    
+    # محاكاة عملية التحليل مع تحديثات حية
+    import time
+    
+    # عوامل أولية صغيرة للبدء
+    small_primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 
+                   53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 
+                   109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 
+                   173, 179, 181, 191, 193, 197, 199]
+    
+    temp_N = N
+    start_time = time.time()
+    max_time = custom_settings["max_time"]
+    
+    # تحديث الواجهة
+    def update_display():
+        progress = shared.get_progress()
+        shared.progress_bar.progress(int(progress))
+        
+        elapsed = time.time() - start_time
+        factors_found = len(shared.factors)
+        remaining_bits = shared.remainder.bit_length() if shared.remainder > 1 else 0
+        
+        status_info = f"""
+        **⏱️ الوقت المنقضي:** {elapsed:.1f} ثانية  
+        **📊 التقدم:** {progress:.1f}%  
+        **🔢 العوامل المكتشفة:** {factors_found}  
+        **🔍 الباقي:** {remaining_bits} بت  
+        **🔎 الطرق المستخدمة:** {', '.join(set(m for _, m in shared.methods))}
+        """
+        shared.status_text.markdown(status_info)
+    
+    # التحليل بالعوامل الصغيرة
+    if enabled_methods.get("small", True):
+        for p in small_primes:
+            if temp_N % p == 0:
+                count = 0
+                while temp_N % p == 0:
+                    count += 1
+                    temp_N //= p
+                shared.consume(p, "Small")
+                update_display()
+                
+                if time.time() - start_time > max_time > 0:
+                    shared.status_text.warning("⏰ انتهى الوقت المحدد")
+                    return shared
+    
+    # استخدام خوارزميات متقدمة للباقي
+    strategies = []
+    if enabled_methods.get("riemann", True):
+        strategies.append(("Riemann", riemann_guided_pollard_rho))
+    if enabled_methods.get("ecm", True):
+        strategies.append(("ECM", mathematically_optimized_ecm))
+    if enabled_methods.get("hybrid", True):
+        strategies.extend([
+            ("Pollard-Rho", enhanced_pollard_rho_brent),
+            ("p-1", mathematically_optimized_p1),
+            ("QS", quadratic_sieve_enhanced)
+        ])
+    
+    strategy_idx = 0
+    attempts = 0
+    
+    while temp_N > 1 and not shared.stop_event.is_set():
+        if time.time() - start_time > max_time > 0:
+            shared.status_text.warning("⏰ انتهى الوقت المحدد")
+            break
+        
+        if is_prime_fast(temp_N):
+            shared.consume(temp_N, "Prime-Final")
+            break
+        
+        # تجربة الاستراتيجية الحالية
+        strategy_name, strategy_func = strategies[strategy_idx % len(strategies)]
+        factor = strategy_func(temp_N)
+        
+        attempts += 1
+        if attempts > 5:  # تغيير الاستراتيجية بعد 5 محاولات فاشلة
+            strategy_idx += 1
+            attempts = 0
+            shared.record_strategy_switch(
+                strategies[(strategy_idx-1) % len(strategies)][0],
+                strategies[strategy_idx % len(strategies)][0],
+                "تكرار المحاولات الفاشلة"
+            )
+        
+        if factor and 1 < factor < temp_N:
+            shared.consume(factor, strategy_name)
+            temp_N = shared.remainder
+            attempts = 0  # إعادة تعيين العدادات عند النجاح
+            update_display()
+        
+        # تحديث الواجهة بشكل دوري
+        if attempts % 3 == 0:
+            update_display()
+        
+        time.sleep(0.1)  # منع الحمل الزائد على النظام
+    
+    # إذا بقي جزء ولم نستطع تحليله
+    if temp_N > 1 and not is_prime_fast(temp_N):
+        shared.consume(temp_N, "Remainder")
+    
+    shared.progress_bar.progress(100)
+    shared.status_text.success("✅ اكتمل التحليل")
+    
+    return shared
+
+def display_results(N, shared, show_math=True, save_results=False):
+    """عرض النتائج بطريقة تفاعلية ومحسنة"""
+    
+    st.markdown("---")
     st.subheader("📊 النتائج النهائية")
     
-    col1, col2, col3 = st.columns(3)
+    # البطاقات العلوية
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("الوقت الإجمالي", f"{shared.get_elapsed():.3f} ثانية")
+        elapsed = shared.get_elapsed()
+        st.metric("⏱️ الوقت الإجمالي", f"{elapsed:.3f} ثانية")
+    
     with col2:
-        st.metric("عدد العوامل", len(shared.factors))
+        total_factors = len(shared.factors)
+        st.metric("🔢 عدد العوامل", total_factors)
+    
     with col3:
         status = "✅ مكتمل" if shared.remainder == 1 else "⏳ غير مكتمل"
-        st.metric("الحالة", status)
+        st.metric("📈 الحالة", status)
+    
+    with col4:
+        if shared.remainder > 1:
+            remainder_bits = shared.remainder.bit_length()
+            st.metric("🔍 الباقي", f"{remainder_bits} بت")
+        else:
+            st.metric("🎯 الدقة", "100%")
     
     # التحقق من صحة النتيجة
     factor_counts = Counter(shared.factors)
@@ -629,37 +970,58 @@ def display_results(N, shared, show_math=True):
         st.success("✅ التحليل صحيح - حاصل ضرب العوامل يساوي العدد الأصلي")
     else:
         st.error("❌ هناك خطأ في التحليل - حاصل الضرب لا يساوي العدد الأصلي")
+        st.info(f"الفرق: {N - product}")
     
     # عرض العوامل
     st.subheader("🧩 العوامل المكتشفة")
     
-    factors_df = pd.DataFrame([
-        {
-            "العامل": factor,
-            "الأساس": base,
-            "الأس": exp,
-            "الحجم (بت)": base.bit_length(),
-            "الطريقة": method
-        }
+    if shared.factors:
+        factors_data = []
         for (factor, method), (base, exp) in zip(
             zip(shared.factors, [m for f, m in shared.methods]),
             factor_counts.items()
-        )
-    ])
-    
-    st.dataframe(factors_df, use_container_width=True)
-    
-    # مخطط العوامل
-    if len(factors_df) > 0:
-        fig = px.pie(factors_df, names='العامل', values='الأس', 
-                     title='توزيع العوامل')
-        st.plotly_chart(fig, use_container_width=True)
+        ):
+            factors_data.append({
+                "العامل": factor,
+                "الأساس": base,
+                "الأس": exp,
+                "الحجم (بت)": base.bit_length(),
+                "الطريقة": method,
+                "النسبة (%)": (base.bit_length() / N.bit_length()) * 100
+            })
+        
+        factors_df = pd.DataFrame(factors_data)
+        st.dataframe(factors_df, use_container_width=True)
+        
+        # مخططات العوامل
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if len(factors_df) > 0:
+                fig = px.pie(factors_df, names='العامل', values='الأس', 
+                            title='توزيع العوامل حسب التكرار')
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            if len(factors_df) > 0:
+                fig = px.bar(factors_df, x='العامل', y='الحجم (بت)',
+                            color='الطريقة', title='حجم العوامل بالبت')
+                st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("⚠️ لم يتم العثور على أي عوامل")
     
     # الرؤى الرياضية
     if show_math and shared.mathematical_insights:
         st.subheader("🧠 الرؤى الرياضية")
-        for insight in shared.mathematical_insights:
-            st.write(f"• {insight}")
+        insights_col1, insights_col2 = st.columns(2)
+        
+        with insights_col1:
+            for i, insight in enumerate(shared.mathematical_insights[:len(shared.mathematical_insights)//2]):
+                st.write(f"• {insight}")
+        
+        with insights_col2:
+            for i, insight in enumerate(shared.mathematical_insights[len(shared.mathematical_insights)//2:]):
+                st.write(f"• {insight}")
     
     # إحصائيات الأداء
     st.subheader("📈 إحصائيات الأداء")
@@ -667,69 +1029,65 @@ def display_results(N, shared, show_math=True):
     if shared.worker_stats:
         stats_data = []
         for worker, stats in shared.worker_stats.items():
+            success_rate = (stats["successes"] / max(1, stats["attempts"])) * 100
             stats_data.append({
                 "العامل": worker,
                 "المحاولات": stats["attempts"],
                 "النجاحات": stats["successes"],
-                "معدل النجاح": stats["successes"] / max(1, stats["attempts"])
+                "معدل النجاح %": round(success_rate, 2)
             })
         
         stats_df = pd.DataFrame(stats_data)
-        st.dataframe(stats_df, use_container_width=True)
         
-        # مخطط الأداء
-        if len(stats_df) > 0:
-            fig = px.bar(stats_df, x='العامل', y='معدل النجاح',
-                        title='معدل نجاح العمال')
-            st.plotly_chart(fig, use_container_width=True)
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.dataframe(stats_df, use_container_width=True)
+        
+        with col2:
+            if len(stats_df) > 0:
+                fig = px.bar(stats_df, x='العامل', y='معدل النجاح %',
+                            title='كفاءة العمال (%)', color='معدل النجاح %')
+                st.plotly_chart(fig, use_container_width=True)
     
     # تاريخ التحويلات
     if shared.strategy_history:
         st.subheader("🔄 تاريخ تحويل الاستراتيجيات")
-        for entry in shared.strategy_history:
-            st.write(f"**[{entry['time']:.1f}ث]** {entry['from']} → {entry['to']} | السبب: {entry['reason']}")
-
-# ========== دوال التحليل (مبسطة للويب) ==========
-def enhanced_factorize_with_preferences(N, enabled_methods, custom_settings):
-    """نسخة مبسطة من التحليل للاستخدام في الويب"""
-    shared = SharedData(N)
+        for i, entry in enumerate(shared.strategy_history):
+            with st.expander(f"تحويل {i+1}: {entry['from']} → {entry['to']}"):
+                st.write(f"**الوقت:** {entry['time']:.1f} ثانية")
+                st.write(f"**السبب:** {entry['reason']}")
+                st.write(f"**الباقي وقت التحويل:** {entry['current_remainder']}")
     
-    # محاكاة عملية التحليل
-    import time
-    
-    # عوامل أولية صغيرة للعرض التوضيحي
-    demo_factors = []
-    temp_N = N
-    
-    # تحليل بالعوامل الصغيرة
-    small_primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47]
-    for p in small_primes:
-        while temp_N % p == 0:
-            demo_factors.append(p)
-            shared.consume(p, "Small")
-            temp_N //= p
-    
-    # استخدام خوارزميات أخرى إذا كان العدد كبيراً
-    if temp_N > 1:
-        if enabled_methods.get("riemann", True):
-            # محاكاة خوارزمية ريمان
-            factor = riemann_guided_pollard_rho(temp_N)
-            if factor and factor < temp_N:
-                shared.consume(factor, "Riemann-0")
-                temp_N //= factor
+    # خيارات التصدير
+    if save_results:
+        st.subheader("💾 حفظ النتائج")
         
-        if temp_N > 1 and enabled_methods.get("ecm", True):
-            # محاكاة ECM
-            factor = mathematically_optimized_ecm(temp_N)
-            if factor and factor < temp_N:
-                shared.consume(factor, "ECM-0")
-                temp_N //= factor
-    
-    # إذا بقي جزء، نضيفه كعامل أولي
-    if temp_N > 1:
-        shared.consume(temp_N, "Prime-Final")
-    
-    return shared
+        # إنشاء تقرير
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report = f"""
+        تقرير تحليل PPFO v18.1
+        =====================
+        التاريخ: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        العدد المدخل: {N}
+        الحجم: {N.bit_length()} بت
+        الوقت الإجمالي: {shared.get_elapsed():.3f} ثانية
+        عدد العوامل: {len(shared.factors)}
+        الحالة: {'مكتمل' if shared.remainder == 1 else 'غير مكتمل'}
+        
+        العوامل:
+        {chr(10).join(f'- {f[1]}: {f[0]}' for f in zip(shared.factors, [m for _, m in shared.methods]))}
+        
+        الرؤى الرياضية:
+        {chr(10).join(f'- {insight}' for insight in shared.mathematical_insights)}
+        """
+        
+        st.download_button(
+            label="📥 تحميل التقرير",
+            data=report,
+            file_name=f"ppfo_analysis_{timestamp}.txt",
+            mime="text/plain"
+        )
 
 # ========== التشغيل الرئيسي ==========
 if __name__ == "__main__":
