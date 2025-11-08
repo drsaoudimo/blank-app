@@ -3,7 +3,7 @@
 
 """
 PPFO v20.3 — تطبيق الويب الرياضي المتقدم مع إطار ريمان الكامل
-نسخة Streamlit مع تحليل كامل للعوامل الأولية
+نسخة Streamlit مع دعم كامل للأعداد الكبيرة جداً
 """
 
 import math
@@ -42,11 +42,13 @@ st.markdown("""
         border-radius: 0.5rem;
         margin: 0.5rem 0;
     }
-    .factor-analysis {
-        background-color: #f8f9fa;
-        border-left: 4px solid #1f77b4;
+    .large-number-warning {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 0.5rem;
         padding: 1rem;
         margin: 1rem 0;
+        color: #856404;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -87,15 +89,21 @@ def zetazero(n, precise=False):
     return gamma_est
 
 def riemann_correction(estimate, zeros=None):
-    """تصحيح ريمان للتقديرات"""
+    """تصحيح ريمان للتقديرات - معدل للأعداد الكبيرة"""
     if zeros is None:
         zeros = RIEMANN_ZEROS
+    
+    # استخدام اللوغاريتمات لتجنب الأعداد الكبيرة جداً
+    if estimate > 10**20:
+        log_estimate = math.log(estimate)
+        correction_factor = math.sqrt(log_estimate) * (log_estimate ** 0.25)
+        return int(round(correction_factor * 1000))  # تقدير معقول
     
     x = max(3, int(estimate))
     ln_x = math.log(x)
     s = 0.0
     
-    for gamma in zeros[:10]:
+    for gamma in zeros[:8]:  # استخدام عدد أقل من الأصفار للأعداد الكبيرة
         term = math.cos(gamma * ln_x) / math.sqrt(0.25 + gamma * gamma)
         weight = 1.0 / (1.0 + 0.1 * gamma)
         s += weight * term
@@ -104,344 +112,230 @@ def riemann_correction(estimate, zeros=None):
     return int(round(correction))
 
 def prime_nth_estimate(n, use_riemann=False):
-    """تقدير العدد الأولي رقم n باستخدام إطار ريمان"""
+    """تقدير العدد الأولي رقم n باستخدام إطار ريمان - معدل للأعداد الكبيرة"""
     if n < 6:
         return [2, 3, 5, 7, 11][n-1]
     
     ln_n = math.log(n)
     ln_ln_n = math.log(ln_n)
     
-    base = n * (ln_n + ln_ln_n - 1 + (ln_ln_n - 2) / ln_n)
+    # الصيغة الأساسية المعدلة للأعداد الكبيرة
+    if n > 10**6:
+        base = n * (ln_n + ln_ln_n - 0.5)  # تبسيط للكفاءة
+    else:
+        base = n * (ln_n + ln_ln_n - 1 + (ln_ln_n - 2) / ln_n)
     
-    if n > 1000:
-        base -= EULER_GAMMA * n / ln_n
-    
-    C_calibrated = 0.02176304641727069 + (-0.36685833943157 / ln_n) + (8.69441462116514 / (ln_n**2))
-    estimate = int(round(base + C_calibrated))
+    estimate = int(round(base))
     
     if use_riemann:
         corr = riemann_correction(estimate)
-        cap = max(10, int(0.005 * estimate))
+        # تحديد حد معقول للتصحيح
+        cap = max(1000, int(0.001 * estimate))
         corr = max(-cap, min(cap, corr))
         estimate += corr
     
-    return estimate
+    return max(2, estimate)  # التأكد من أن التقدير أكبر من 1
 
-def factreaman(n):
-    """تقدير عامل شبه أولي سريع باستخدام ريمان"""
-    n = int(n)
-    if n < 2:
-        return n
+def factreaman_large(n):
+    """تقدير عامل شبه أولي سريع للأعداد الكبيرة جداً"""
+    n_int = int(n)
+    if n_int < 2:
+        return n_int
     
-    bit_length = n.bit_length()
-    prime_estimate = prime_nth_estimate(bit_length // 2, use_riemann=True)
+    bit_length = n_int.bit_length()
     
-    estimate = prime_estimate
-    max_attempts = 100
+    # تقدير أولي مبسط للأعداد الكبيرة
+    if bit_length > 100:
+        # للأعداد الكبيرة جداً، نستخدم خوارزمية مبسطة
+        estimate = 2 ** (bit_length // 3)
+        max_attempts = 50
+    else:
+        prime_estimate = prime_nth_estimate(bit_length // 2, use_riemann=True)
+        estimate = prime_estimate
+        max_attempts = 100
     
     for _ in range(max_attempts):
         if estimate < 2:
             break
-        if n % estimate == 0:
+        if n_int % estimate == 0:
             return estimate
         estimate -= 1
     
     return None
 
-# ========== دوال رياضية أساسية محسنة ==========
-@lru_cache(maxsize=2000)
-def is_prime_fast(n):
-    """اختبار أولية دقيق مع تحسينات ريمان"""
-    n = int(n)
-    if n < 2:
+# ========== دوال رياضية أساسية محسنة للأعداد الكبيرة ==========
+def is_prime_fast_large(n):
+    """اختبار أولية دقيق للأعداد الكبيرة"""
+    n_int = int(n)
+    if n_int < 2:
         return False
-    if n in (2, 3, 5, 7, 11, 13):
+    if n_int in (2, 3, 5, 7, 11, 13):
         return True
-    if n % 2 == 0:
+    if n_int % 2 == 0:
         return 2
     
-    if n < 10000:
-        for i in range(3, int(math.sqrt(n)) + 1, 2):
-            if n % i == 0:
+    # للأعداد الكبيرة، نستخدم اختبار فيرما الأساسي فقط
+    if n_int > 10**15:
+        bases = [2, 3, 5, 7, 11, 13]
+        for a in bases:
+            if a >= n_int:
+                continue
+            if pow(a, n_int-1, n_int) != 1:
                 return False
         return True
     
-    bases = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37]
+    # للأعداد الأصغر، نستخدم اختبار أكثر دقة
+    if n_int < 10**8:
+        for i in range(3, int(math.sqrt(n_int)) + 1, 2):
+            if n_int % i == 0:
+                return False
+        return True
+    
+    # للأعداد المتوسطة
+    bases = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
     for a in bases:
-        if a >= n:
+        if a >= n_int:
             continue
-        if pow(a, n-1, n) != 1:
+        if pow(a, n_int-1, n_int) != 1:
             return False
     
     return True
 
-def gcd(a, b):
-    """حساب القاسم المشترك الأكبر"""
-    while b:
-        a, b = b, a % b
-    return a
+def gcd_large(a, b):
+    """حساب القاسم المشترك الأكبر للأعداد الكبيرة"""
+    a_int, b_int = int(a), int(b)
+    while b_int:
+        a_int, b_int = b_int, a_int % b_int
+    return a_int
 
-def trial_division_small_factors(n, limit=10000):
-    """تحليل بالقسمة المتكررة للعوامل الصغيرة"""
+def trial_division_small_factors_large(n, limit=10000):
+    """تحليل بالقسمة المتكررة للعوامل الصغيرة - للأعداد الكبيرة"""
+    n_int = int(n)
     factors = []
     
     # اختبار القسمة على 2
-    while n % 2 == 0:
+    while n_int % 2 == 0:
         factors.append(2)
-        n //= 2
+        n_int //= 2
     
-    # اختبار القسمة على الأعداد الفردية
+    # اختبار القسمة على الأعداد الفردية الصغيرة
     f = 3
-    while f * f <= n and f <= limit:
-        if n % f == 0:
+    while f * f <= n_int and f <= limit:
+        if n_int % f == 0:
             factors.append(f)
-            n //= f
+            n_int //= f
         else:
             f += 2
     
-    return factors, n
+    return factors, n_int
 
-def brent_rho(n, timeout=None, use_riemann=False):
-    """خوارزمية Brent Rho مع تحسينات ريمان"""
-    if n % 2 == 0:
+def pollard_rho_large(n, timeout=None, max_iterations=10000):
+    """خوارزمية Pollard Rho للأعداد الكبيرة"""
+    n_int = int(n)
+    if n_int % 2 == 0:
         return 2
-    if n % 3 == 0:
-        return 3
-    
-    y = random.randrange(2, n-1)
-    c = random.randrange(1, n-1)
-    
-    if use_riemann:
-        zero_idx = random.randint(1, min(10, len(RIEMANN_ZEROS)))
-        gamma = RIEMANN_ZEROS[zero_idx - 1]
-        c = (c + int(math.cos(gamma) * 1000)) % (n-1) + 1
-    
-    m = random.randrange(1, min(n-1, 100))
-    g, r, q = 1, 1, 1
-    x = 0
-    start = time.time()
-    
-    while g == 1:
-        if timeout and (time.time() - start) > timeout:
-            return None
-        x = y
-        for _ in range(r):
-            y = (y * y + c) % n
-        k = 0
-        while k < r and g == 1:
-            ys = y
-            for _ in range(min(m, r - k)):
-                y = (y * y + c) % n
-                q = (q * abs(x - y)) % n
-            g = gcd(q, n)
-            k += m
-        r *= 2
-    
-    if g == n:
-        while True:
-            ys = (ys * ys + c) % n
-            g = gcd(abs(x - ys), n)
-            if g > 1:
-                break
-    
-    return g if g != n else None
-
-def pollard_rho_riemann(n, timeout=None):
-    """خوارزمية Pollard Rho مع توجيه ريمان"""
-    if n % 2 == 0:
-        return 2
-    if n % 3 == 0:
+    if n_int % 3 == 0:
         return 3
     
     start = time.time()
     
-    for attempt in range(10):
+    for attempt in range(3):  # محاولات أقل للأعداد الكبيرة
         if timeout and (time.time() - start) > timeout:
             return None
         
-        zero_idx = (attempt % len(RIEMANN_ZEROS)) + 1
-        gamma = zetazero(zero_idx)
-        
-        x = int((math.sin(gamma) * 1e6) % (n-2)) + 2
+        # استخدام بذور عشوائية آمنة للأعداد الكبيرة
+        x = random.randint(2, min(n_int-2, 10**6))
         y = x
-        c = int((math.cos(gamma) * 1e6) % (n-1)) + 1
+        c = random.randint(1, min(n_int-1, 10**6))
         
         d = 1
         iterations = 0
-        max_iterations = 100000
         
         while d == 1 and iterations < max_iterations:
-            x = (x * x + c) % n
-            y = (y * y + c) % n
-            y = (y * y + c) % n
-            d = gcd(abs(x - y), n)
-            
             if timeout and (time.time() - start) > timeout:
                 return None
             
+            x = (x * x + c) % n_int
+            y = (y * y + c) % n_int
+            y = (y * y + c) % n_int
+            d = gcd_large(abs(x - y), n_int)
+            
             iterations += 1
             
-            if d == n:
+            if d == n_int:
                 break
         
-        if d > 1 and d < n:
+        if d > 1 and d < n_int:
             return d
     
     return None
 
-# ========== دوال التحليل الرئيسية مع ريمان ==========
-def factorize_completely(n, timeout=60, use_riemann=True, max_iterations=1000):
-    """تحليل العدد completely إلى عوامله الأولية فقط"""
-    if n < 2:
+# ========== دوال التحليل الرئيسية للأعداد الكبيرة ==========
+def factorize_large_number(n, timeout=60, use_riemann=True):
+    """تحليل الأعداد الكبيرة جداً باستخدام خوارزميات مبسطة"""
+    n_int = int(n)
+    if n_int < 2:
         return []
     
-    all_factors = []
-    numbers_to_factor = [n]
-    iterations = 0
-    
-    start_time = time.time()
-    
-    while numbers_to_factor and iterations < max_iterations:
-        iterations += 1
-        
-        if timeout and (time.time() - start_time) > timeout:
-            break
-            
-        current = numbers_to_factor.pop()
-        
-        if current == 1:
-            continue
-            
-        # إذا كان أولياً، أضفه إلى النتائج
-        if is_prime_fast(current):
-            all_factors.append(current)
-            continue
-        
-        factor_found = False
-        
-        # المرحلة 1: التحليل بالعوامل الصغيرة
-        small_factors, remaining = trial_division_small_factors(current)
-        if small_factors:
-            all_factors.extend(small_factors)
-            if remaining > 1:
-                numbers_to_factor.append(remaining)
-            factor_found = True
-            continue
-        
-        # المرحلة 2: Factreaman سريع
-        if not factor_found and use_riemann:
-            f = factreaman(current)
-            if f and f != current and current % f == 0:
-                numbers_to_factor.extend([f, current // f])
-                factor_found = True
-                continue
-        
-        # المرحلة 3: Brent Rho
-        if not factor_found:
-            d = brent_rho(current, timeout=timeout/10, use_riemann=use_riemann)
-            if d and d != current:
-                numbers_to_factor.extend([d, current // d])
-                factor_found = True
-                continue
-        
-        # المرحلة 4: Pollard Rho مع ريمان
-        if not factor_found:
-            d = pollard_rho_riemann(current, timeout=timeout/10)
-            if d and d != current:
-                numbers_to_factor.extend([d, current // d])
-                factor_found = True
-                continue
-        
-        # إذا فشلت جميع المحاولات، نضيف العدد كما هو
-        if not factor_found:
-            all_factors.append(current)
-    
-    return sorted(all_factors)
-
-def factorize_with_steps(n, timeout=60, use_riemann=True):
-    """تحليل مع تتبع الخطوات"""
-    if n < 2:
-        return [], []
-    
     factors = []
-    steps = []
-    current = n
-    iteration = 0
-    max_iterations = 100
+    remaining = n_int
     
     start_time = time.time()
     
-    while current > 1 and iteration < max_iterations:
-        iteration += 1
-        
-        if timeout and (time.time() - start_time) > timeout:
-            steps.append("⏰ انتهى الوقت المحدد للتحليل")
-            break
-        
-        # إذا كان أولياً، أضفه وتوقف
-        if is_prime_fast(current):
-            factors.append(current)
-            steps.append(f"{current} هو عدد أولي ✅")
-            break
-        
-        factor_found = False
-        
-        # التحليل بالعوامل الصغيرة
-        small_factors, remaining = trial_division_small_factors(current)
-        if small_factors:
-            factors.extend(small_factors)
-            steps.append(f"تحليل بالقسمة: {current} → {small_factors} + {remaining}")
-            current = remaining
-            factor_found = True
-            continue
-        
-        # Factreaman
-        if not factor_found and use_riemann:
-            f = factreaman(current)
-            if f and f != current and current % f == 0:
-                factors.append(f)
-                steps.append(f"{current} ÷ {f} = {current // f} (Factreaman + Riemann)")
-                current = current // f
-                factor_found = True
-                continue
-        
-        # Brent Rho
-        if not factor_found:
-            d = brent_rho(current, timeout=timeout/10, use_riemann=use_riemann)
-            if d and d != current:
-                factors.append(d)
-                steps.append(f"{current} ÷ {d} = {current // d} (Brent-Rho + Riemann)")
-                current = current // d
-                factor_found = True
-                continue
-        
-        # Pollard Rho
-        if not factor_found:
-            d = pollard_rho_riemann(current, timeout=timeout/10)
-            if d and d != current:
-                factors.append(d)
-                steps.append(f"{current} ÷ {d} = {current // d} (Pollard-Rho + Riemann)")
-                current = current // d
-                factor_found = True
-                continue
-        
-        # إذا فشلت جميع المحاولات
-        if not factor_found:
-            factors.append(current)
-            steps.append(f"{current} لم نتمكن من تحليله بالكامل ⚠️")
-            break
+    # المرحلة 1: التحليل بالعوامل الصغيرة
+    small_factors, remaining = trial_division_small_factors_large(remaining, limit=1000)
+    factors.extend(small_factors)
     
-    return factors, steps
+    if remaining == 1:
+        return factors
+    
+    # المرحلة 2: Factreaman للأعداد الكبيرة
+    if use_riemann and remaining > 10**6:
+        f = factreaman_large(remaining)
+        if f and f != remaining and remaining % f == 0:
+            factors.append(f)
+            factors.extend(factorize_large_number(remaining // f, timeout=timeout//2, use_riemann=use_riemann))
+            return factors
+    
+    # المرحلة 3: Pollard Rho للأعداد الكبيرة
+    if remaining > 10**6:
+        d = pollard_rho_large(remaining, timeout=timeout//3)
+        if d and d != remaining:
+            factors.append(d)
+            factors.extend(factorize_large_number(remaining // d, timeout=timeout//3, use_riemann=use_riemann))
+            return factors
+    
+    # إذا بقي جزء ولم نستطع تحليله
+    if remaining > 1:
+        factors.append(remaining)
+    
+    return factors
 
-def verify_factorization(original, factors):
-    """التحقق من صحة التحليل"""
+def analyze_large_number(n):
+    """تحليل أولي للعدد الكبير لتحديد خصائصه"""
+    n_int = int(n)
+    bit_length = n_int.bit_length()
+    
+    analysis = {
+        'bit_length': bit_length,
+        'digit_count': len(str(n_int)),
+        'is_even': n_int % 2 == 0,
+        'last_digits': str(n_int)[-6:],
+        'approximate_size': f"10^{int(math.log10(n_int))}",
+        'factorization_difficulty': 'Very High' if bit_length > 150 else 'High'
+    }
+    
+    return analysis
+
+def verify_factorization_large(original, factors):
+    """التحقق من صحة التحليل للأعداد الكبيرة"""
     product = 1
     for factor in factors:
-        product *= factor
+        product *= int(factor)
     
     return product == original, product
 
-# ========== واجهة Streamlit المحسنة مع ريمان ==========
+# ========== واجهة Streamlit المحسنة للأعداد الكبيرة ==========
 def main():
     st.markdown('<div class="main-header">🧮 PPFO v20.3 - الإطار الرياضي المتقدم مع ريمان</div>', unsafe_allow_html=True)
     
@@ -453,7 +347,7 @@ def main():
         st.write("✅ أصفار زيتا غير التافهة")
         st.write("✅ تصحيح ريمان للتقديرات")
         st.write("✅ Factreaman مع التوجيه الرياضي")
-        st.write("✅ خوارزميات Pollard/Brent مع ريمان")
+        st.write("✅ دعم الأعداد الكبيرة جداً")
         st.write(f"**عدد أصفار زيتا:** {len(RIEMANN_ZEROS)}")
         
         use_riemann = st.checkbox("تفعيل إطار ريمان", value=True)
@@ -467,12 +361,12 @@ def main():
         input_method = st.radio("طريقة الإدخال:", ["رقم عادي", "رقم سداسي عشري", "تعبير رياضي"])
         
         if input_method == "رقم عادي":
-            N_str = st.text_input("أدخل العدد المراد تحليله:", value="1201883737878837377")
+            N_str = st.text_input("أدخل العدد المراد تحليله:", value="900090009000900090099009900990099009909990999099909991")
         elif input_method == "رقم سداسي عشري":
-            hex_str = st.text_input("أدخل العدد بصيغة سداسية عشرية:", value="0x10B2D4E5A3D4E81")
+            hex_str = st.text_input("أدخل العدد بصيغة سداسية عشرية:", value="0x1234567890ABCDEF")
             N_str = hex_str
         else:
-            expr = st.text_input("أدخل تعبيراً رياضياً:", value="13 * 7 * 19 * 2281 * 191 * 21503 * 74201")
+            expr = st.text_input("أدخل تعبيراً رياضياً:", value="123456789012345678901234567890")
             N_str = expr
     
     with col2:
@@ -493,7 +387,13 @@ def main():
                 st.error("العدد يجب أن يكون أكبر من 1")
                 return
             
-            if is_prime_fast(N):
+            # تحليل أولي للعدد الكبير
+            analysis = analyze_large_number(N)
+            
+            if bit_length > 150:
+                st.warning("⚠️ هذا العدد كبير جداً وقد يستغرق تحليله وقتاً طويلاً")
+            
+            if is_prime_fast_large(N):
                 st.success("✅ العدد أولي")
             else:
                 st.info("🔢 العدد مركب")
@@ -507,7 +407,7 @@ def main():
     col1, col2 = st.columns(2)
     
     with col1:
-        timeout = st.slider("الوقت الأقصى (ثواني)", 1, 300, 60)
+        timeout = st.slider("الوقت الأقصى (ثواني)", 1, 600, 120)
     
     with col2:
         save_results = st.checkbox("حفظ النتائج", value=False)
@@ -517,63 +417,70 @@ def main():
             st.error("❌ العدد يجب أن يكون أكبر من 1")
             return
         
-        with st.spinner("جاري التحليل المتعمق باستخدام إطار ريمان..."):
+        # تحذير للأعداد الكبيرة جداً
+        if bit_length > 200:
+            st.markdown('<div class="large-number-warning">'
+                       '⚠️ تحذير: هذا العدد كبير جداً (أكثر من 200 بت). '
+                       'التحليل قد يستغرق وقتاً طويلاً أو قد لا يكتمل.'
+                       '</div>', unsafe_allow_html=True)
+        
+        with st.spinner("جاري التحليل المتعمق للأعداد الكبيرة..."):
             try:
-                # التحليل الأولي
-                initial_factors, steps = factorize_with_steps(
+                # التحليل للأعداد الكبيرة
+                factors = factorize_large_number(
                     N, 
                     timeout=timeout, 
                     use_riemann=use_riemann
                 )
                 
-                # التحليل النهائي لضمان أن جميع العوامل أولية
-                final_factors = []
-                for factor in initial_factors:
-                    if is_prime_fast(factor):
-                        final_factors.append(factor)
-                    else:
-                        # تحليل العوامل غير الأولية
-                        sub_factors = factorize_completely(
-                            factor, 
-                            timeout=max(10, timeout//5), 
-                            use_riemann=use_riemann
-                        )
-                        final_factors.extend(sub_factors)
-                
-                # التحقق النهائي
-                is_correct, product = verify_factorization(N, final_factors)
+                # التحقق من صحة التحليل
+                is_correct, product = verify_factorization_large(N, factors)
                 
                 # معلومات ريمان
                 riemann_info = {}
                 if use_riemann and show_riemann_info:
-                    riemann_info = calculate_riemann_metrics(N, final_factors)
+                    riemann_info = calculate_riemann_metrics_large(N, factors)
                 
-                display_results(N, final_factors, steps, is_correct, product, riemann_info, show_steps)
+                # عرض النتائج
+                display_results_large(N, factors, is_correct, product, riemann_info, show_steps)
                 
             except Exception as e:
                 st.error(f"❌ فشل التحليل: {e}")
 
-def calculate_riemann_metrics(n, factors):
-    """حساب مقاييس ريمان للتحليل"""
+def calculate_riemann_metrics_large(n, factors):
+    """حساب مقاييس ريمان للتحليل - للأعداد الكبيرة"""
     metrics = {}
     
     bit_length = n.bit_length()
-    prime_estimate = prime_nth_estimate(bit_length // 2, use_riemann=True)
+    
+    # تقديرات مبسطة للأعداد الكبيرة
+    if bit_length > 100:
+        prime_estimate = 2 ** (bit_length // 3)
+    else:
+        prime_estimate = prime_nth_estimate(bit_length // 2, use_riemann=True)
+    
     metrics["تقدير_ريمان_للعوامل"] = prime_estimate
     
-    correction = riemann_correction(n)
-    metrics["تصحيح_ريمان"] = correction
+    # تصحيح مبسط للأعداد الكبيرة
+    if n > 10**20:
+        correction = int(math.sqrt(bit_length) * 1000)
+    else:
+        correction = riemann_correction(n)
     
+    metrics["تصحيح_ريمان"] = correction
     metrics["أصفار_زيتا_المستخدمة"] = len(RIEMANN_ZEROS)
     
     if factors:
-        factor_product = math.prod(factors)
-        metrics["دقة_التحليل"] = abs(n - factor_product)
+        try:
+            factor_product = math.prod(factors)
+            metrics["دقة_التحليل"] = abs(n - factor_product)
+        except:
+            metrics["دقة_التحليل"] = "غير محسوب"
     
     return metrics
 
-def display_results(original_number, factors, steps, is_correct, product, riemann_info=None, show_steps=True):
-    """عرض النتائج مع معلومات ريمان"""
+def display_results_large(original_number, factors, is_correct, product, riemann_info=None, show_steps=True):
+    """عرض النتائج للأعداد الكبيرة"""
     
     st.markdown("---")
     st.subheader("📊 النتائج النهائية")
@@ -625,84 +532,72 @@ def display_results(original_number, factors, steps, is_correct, product, rieman
     # تحليل العوامل
     st.subheader("🔍 تحليل العوامل المكتشفة")
     
-    if factors:
+    if len(factors) > 1 or (len(factors) == 1 and factors[0] != original_number):
         # التحقق من أولية جميع العوامل
-        non_prime_factors = [f for f in set(factors) if not is_prime_fast(f) and f > 1]
-        prime_factors = [f for f in set(factors) if is_prime_fast(f) and f > 1]
+        non_prime_factors = [f for f in set(factors) if not is_prime_fast_large(f) and f > 1]
+        prime_factors = [f for f in set(factors) if is_prime_fast_large(f) and f > 1]
         
         if non_prime_factors:
-            st.error(f"❌ يوجد {len(non_prime_factors)} عامل غير أولي: {non_prime_factors}")
+            st.error(f"❌ يوجد {len(non_prime_factors)} عامل غير أولي")
+            # عرض العوامل غير الأولية الكبيرة بشكل مختصر
+            for factor in non_prime_factors:
+                if factor > 10**10:
+                    st.write(f"عامل غير أولي كبير: ...{str(factor)[-20:]}")
+                else:
+                    st.write(f"عامل غير أولي: {factor}")
         else:
             st.success(f"✅ جميع العوامل أولية ({len(prime_factors)} عامل أولي)")
         
         factor_counts = Counter(factors)
         
-        # إنشاء جدول العوامل
+        # إنشاء جدول العوامل (للعوامل المعقولة الحجم فقط)
         factors_data = []
         for factor, count in factor_counts.items():
-            prime_status = "✅" if is_prime_fast(factor) else "❌"
-            factors_data.append({
-                "العامل": factor,
-                "التكرار": count,
-                "الحجم (بت)": factor.bit_length(),
-                "أولي": prime_status
-            })
+            if factor < 10**15:  # عرض العوامل المعقولة الحجم فقط
+                prime_status = "✅" if is_prime_fast_large(factor) else "❌"
+                factors_data.append({
+                    "العامل": factor,
+                    "التكرار": count,
+                    "الحجم (بت)": factor.bit_length(),
+                    "أولي": prime_status
+                })
         
-        factors_df = pd.DataFrame(factors_data)
-        st.dataframe(factors_df, use_container_width=True)
+        if factors_data:
+            factors_df = pd.DataFrame(factors_data)
+            st.dataframe(factors_df, use_container_width=True)
         
-        # مخططات العوامل
-        col1, col2 = st.columns(2)
+        # مخططات العوامل (للعوامل المعقولة الحجم فقط)
+        reasonable_factors = [(f, c) for f, c in factor_counts.items() if f < 10**10]
+        if reasonable_factors:
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                factors_df_small = pd.DataFrame([
+                    {"العامل": f, "التكرار": c} 
+                    for f, c in reasonable_factors
+                ])
+                fig = px.pie(factors_df_small, names='العامل', values='التكرار', 
+                            title='توزيع العوامل الصغيرة حسب التكرار')
+                st.plotly_chart(fig, use_container_width=True)
         
-        with col1:
-            fig = px.pie(factors_df, names='العامل', values='التكرار', 
-                        title='توزيع العوامل حسب التكرار')
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            fig = px.bar(factors_df, x='العامل', y='الحجم (بت)',
-                        title='حجم العوامل بالبت', color='أولي')
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # الصيغة الرياضية
-        st.subheader("🧮 الصيغة الرياضية")
-        factor_str = " × ".join([f"{factor}^{count}" if count > 1 else str(factor) 
-                               for factor, count in factor_counts.items()])
-        
-        if is_correct:
-            st.latex(f"{original_number} = {factor_str}")
+        # الصيغة الرياضية المبسطة
+        st.subheader("🧮 الصيغة الرياضية المبسطة")
+        if len(factors) <= 10:
+            factor_str = " × ".join([f"{factor}^{count}" if count > 1 else str(factor) 
+                                   for factor, count in factor_counts.items()])
+            if is_correct:
+                st.latex(f"{original_number} = {factor_str}")
+            else:
+                st.warning(f"⚠️ الصيغة غير صحيحة: {original_number} ≠ {factor_str}")
         else:
-            st.warning(f"⚠️ الصيغة غير صحيحة: {original_number} ≠ {factor_str}")
-        
-        # تحليل إضافي للعوامل غير الأولية
-        if non_prime_factors:
-            st.subheader("🔧 تحليل إضافي للعوامل غير الأولية")
-            for factor in non_prime_factors:
-                with st.expander(f"تحليل العامل {factor}"):
-                    sub_factors = factorize_completely(factor, timeout=30, use_riemann=True)
-                    sub_counts = Counter(sub_factors)
-                    sub_str = " × ".join([f"{f}^{c}" if c > 1 else str(f) for f, c in sub_counts.items()])
-                    st.write(f"**تحليل {factor}:** {sub_str}")
-                    
-                    # التحقق من التحليل
-                    sub_product = math.prod(sub_factors)
-                    if sub_product == factor:
-                        st.success(f"✅ تحليل صحيح: {factor} = {sub_product}")
-                    else:
-                        st.error(f"❌ تحليل خاطئ: {factor} ≠ {sub_product}")
+            st.info("📝 العدد يحتوي على العديد من العوامل. يتم عرض التحليل المبسط.")
+            main_factors = [f for f in factors if f < original_number // 100][:5]
+            if main_factors:
+                st.write(f"أهم العوامل: {' × '.join(map(str, main_factors))} × ...")
         
     else:
-        st.warning("⚠️ لم يتم العثور على أي عوامل")
-    
-    # خطوات التحليل
-    if steps and show_steps:
-        st.subheader("📋 خطوات التحليل")
-        
-        for i, step in enumerate(steps, 1):
-            if "ريمان" in step or "Riemann" in step or "زيتا" in step:
-                st.info(f"{i}. {step} 🌟")
-            else:
-                st.write(f"{i}. {step}")
+        st.warning("⚠️ لم يتم العثور على عوامل أو العدد نفسه هو العامل الوحيد")
+        st.info("💡 هذا يعني أن العدد إما أولي أو كبير جداً ولم نستطع تحليله")
 
 def riemann_tests():
     """اختبارات وتجارب ريمان"""
@@ -713,11 +608,6 @@ def riemann_tests():
         for i in range(1, 6):
             zero = zetazero(i)
             st.sidebar.write(f"ζ₀({i}) ≈ {zero:.10f}")
-    
-    if st.sidebar.button("اختبار Factreaman"):
-        test_num = 123456789
-        result = factreaman(test_num)
-        st.sidebar.write(f"Factreaman({test_num}) = {result}")
 
 if __name__ == "__main__":
     riemann_tests()
