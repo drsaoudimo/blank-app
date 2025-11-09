@@ -3,1198 +3,626 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import os
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, quote
 import json
 import re
 import html
+import base64
+import random
 
-# إعدادات الجلسة
-SESSION_DIR = "/tmp/desktop_browser"
-os.makedirs(SESSION_DIR, exist_ok=True)
+"""
+## 📱 متصفح حر - الوصول إلى جميع المواقع
 
-# تثبيت CSS لمتصفح ديسكتوب عالي الجودة مع دعم كامل للغات
+حل فعال للشبكات التي تمنع الوصول إلا إلى يوتيوب وفيسبوك فقط. يعمل بدون صور لضمان السرعة والأمان.
+"""
+
+# CSS لمتصفح الهاتف مع خيارات التحايل
 st.markdown("""
 <style>
-    /* إعادة ضبط عام */
-    .main {
-        padding: 0 !important;
-    }
-    
-    /* متصفح الديسكتوب */
-    .desktop-browser {
-        width: 100%;
-        height: 75vh;
-        border: 1px solid #c0c0c0;
-        border-radius: 8px;
-        background: white;
-        margin: 10px 0;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-        position: relative;
-        overflow: hidden;
-        font-family: 'Segoe UI', system-ui, -apple-system, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    /* شريط العنوان */
-    .title-bar {
-        background: linear-gradient(180deg, #ebebeb 0%, #d5d5d5 100%);
-        border-bottom: 1px solid #b0b0b0;
-        padding: 4px 8px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        height: 30px;
-        user-select: none;
-    }
-    
-    .window-controls {
-        display: flex;
-        gap: 6px;
-    }
-    
-    .control-btn {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        border: none;
-        cursor: pointer;
-    }
-    
-    .close-btn { background: #ff5f57; }
-    .minimize-btn { background: #ffbd2e; }
-    .maximize-btn { background: #28ca42; }
-    
-    .window-title {
-        flex: 1;
-        text-align: center;
-        font-size: 12px;
-        color: #444;
-        font-weight: 500;
-    }
-    
-    /* شريط الأدوات */
-    .toolbar {
-        background: #f0f0f0;
-        border-bottom: 1px solid #d0d0d0;
-        padding: 6px 10px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        height: 40px;
-    }
-    
-    .toolbar-btn {
-        background: #ffffff;
-        border: 1px solid #c0c0c0;
-        border-radius: 3px;
-        padding: 5px 10px;
-        cursor: pointer;
-        font-size: 12px;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        transition: all 0.2s;
-    }
-    
-    .toolbar-btn:hover {
-        background: #f8f8f8;
-        border-color: #a0a0a0;
-    }
-    
-    .toolbar-btn:active {
-        background: #e8e8e8;
-    }
-    
-    .url-container {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    
-    .url-bar {
-        flex: 1;
-        background: white;
-        border: 1px solid #c0c0c0;
-        border-radius: 15px;
-        padding: 6px 12px;
-        font-size: 13px;
-        outline: none;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    .url-bar:focus {
-        border-color: #0078d4;
-        box-shadow: 0 0 0 1px #0078d4;
-    }
-    
-    .security-badge {
-        background: #107c10;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: 11px;
-        font-weight: 500;
-    }
-    
-    /* علامات التبويب */
-    .tab-container {
-        background: #f8f8f8;
-        border-bottom: 1px solid #d0d0d0;
-        display: flex;
-        padding: 0 8px;
-        overflow-x: auto;
-    }
-    
-    .browser-tab {
-        background: #e8e8e8;
-        padding: 8px 16px;
-        border: 1px solid #c0c0c0;
-        border-bottom: none;
-        border-radius: 8px 8px 0 0;
-        margin-right: 2px;
-        cursor: pointer;
-        min-width: 160px;
-        max-width: 240px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        transition: all 0.2s;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    .browser-tab.active {
-        background: white;
-        border-color: #c0c0c0;
-        border-bottom: 1px solid white;
-        margin-bottom: -1px;
-    }
-    
-    .tab-favicon {
-        width: 14px;
-        height: 14px;
-        border-radius: 2px;
-    }
-    
-    .tab-title {
-        flex: 1;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-weight: 500;
-    }
-    
-    .tab-close {
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: #888;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 9px;
-        cursor: pointer;
-        opacity: 0.7;
-    }
-    
-    .tab-close:hover {
-        opacity: 1;
-    }
-    
-    .new-tab-btn {
-        background: transparent;
-        border: none;
-        padding: 8px 12px;
-        font-size: 16px;
-        cursor: pointer;
-        color: #666;
-    }
-    
-    /* منطقة المحتوى */
-    .content-area {
-        height: calc(100% - 110px);
-        background: white;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .browser-content {
-        width: 100%;
-        height: 100%;
-        border: none;
-        background: white;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    /* شريط الحالة */
-    .status-bar {
-        background: #0078d4;
-        color: white;
-        padding: 3px 10px;
-        font-size: 11px;
-        height: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    /* تحسينات للمحتوى */
-    .website-content {
-        width: 100%;
-        min-height: 100%;
-        padding: 20px;
-        background: white;
-        box-sizing: border-box;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    .content-frame {
-        width: 100%;
-        height: 100%;
-        border: none;
-    }
-    
-    /* التحميل والرسائل */
-    .loading-indicator {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100%;
-        flex-direction: column;
-        gap: 15px;
-        background: white;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    .spinner {
-        width: 32px;
-        height: 32px;
-        border: 3px solid #f3f3f3;
-        border-top: 3px solid #0078d4;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-    
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    
-    .error-message {
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-        color: #dc2626;
-        padding: 20px;
-        border-radius: 6px;
-        text-align: center;
-        margin: 20px;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    .success-message {
-        background: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        color: #16a34a;
-        padding: 15px;
-        border-radius: 6px;
-        margin: 10px;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    /* شريط التقدم */
-    .progress-bar {
-        height: 3px;
-        background: linear-gradient(90deg, #0078d4, #00b294);
-        width: 0%;
-        transition: width 0.3s ease;
-        position: absolute;
-        top: 0;
-        left: 0;
-        z-index: 1000;
-    }
-    
-    /* تحسينات للاستجابة */
-    @media (max-width: 1200px) {
-        .desktop-browser {
-            height: 70vh;
-        }
-    }
-    
-    @media (max-width: 768px) {
-        .desktop-browser {
-            height: 65vh;
-        }
-        
-        .toolbar {
-            padding: 4px 8px;
-            height: 36px;
-        }
-        
-        .toolbar-btn {
-            padding: 4px 8px;
-            font-size: 11px;
-        }
-        
-        .browser-tab {
-            min-width: 120px;
-            padding: 6px 12px;
-        }
-    }
-    
-    /* دعم كامل للغات */
-    body, html {
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    .rtl-text {
-        direction: rtl;
-        text-align: right;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-    }
-    
-    .ltr-text {
-        direction: ltr;
-        text-align: left;
-        font-family: 'Segoe UI', system-ui, 'Segoe UI Emoji', sans-serif;
-    }
+.mobile-container {
+    width: 100%;
+    max-width: 414px;
+    margin: 20px auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.mobile-browser {
+    border-radius: 35px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    background: #000;
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9/19;
+    margin: 0 auto;
+}
+
+.status-bar {
+    background: #000;
+    color: white;
+    padding: 8px 15px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    height: 25px;
+}
+
+.browser-chrome {
+    height: calc(100% - 25px);
+    background: white;
+    display: flex;
+    flex-direction: column;
+}
+
+.nav-bar {
+    display: flex;
+    padding: 8px 15px;
+    background: #f8f8f8;
+    border-bottom: 1px solid #ddd;
+    gap: 10px;
+}
+
+.nav-btn {
+    background: #e0e0e0;
+    border: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.url-display {
+    flex: 1;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.browser-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 15px;
+    background: #f9f9f9;
+}
+
+.loading-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top: 4px solid #007bff;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 15px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* عناصر HTML للموبايل */
+.mobile-h1, .mobile-h2, .mobile-h3 {
+    color: #333;
+    margin: 15px 0 10px 0;
+}
+
+.mobile-h1 { font-size: 22px; }
+.mobile-h2 { font-size: 18px; }
+.mobile-h3 { font-size: 16px; }
+
+.mobile-p, .mobile-text {
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 10px 0;
+    color: #444;
+}
+
+/* وضع النصوص فقط */
+.text-only-mode {
+    background: #ffeeba;
+    border: 1px solid #ffc107;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+
+.proxy-warning {
+    background: #e3f2fd;
+    border: 1px solid #bbdefb;
+    padding: 12px;
+    border-radius: 6px;
+    margin: 15px 0;
+    font-size: 14px;
+}
+
+.unblock-options {
+    display: flex;
+    gap: 8px;
+    margin: 15px 0;
+    flex-wrap: wrap;
+}
+
+.unblock-btn {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.proxy-btn { background: #0288d1; color: white; }
+.text-btn { background: #388e3c; color: white; }
+.api-btn { background: #6a1b9a; color: white; }
+
+.unblock-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-2px);
+}
+
+/* تحسينات للوضع النصي */
+.no-images {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.7;
+    color: #333;
+}
+
+.link-list {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 10px 0;
+}
+
+.link-item {
+    display: block;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+    color: #007bff;
+    text-decoration: none;
+}
+
+.link-item:last-child {
+    border-bottom: none;
+}
+
+.content-summary {
+    background: #e8f5e9;
+    padding: 15px;
+    border-radius: 6px;
+    margin: 15px 0;
+}
 </style>
 """, unsafe_allow_html=True)
 
-class ProfessionalDesktopBrowser:
+# مواقع واجهات برمجة التطبيقات المجانية للوصول إلى المواقع المحجوبة
+FREE_APIS = [
+    "https://api.codetabs.com/v1/proxy?quest=",
+    "https://api.allorigins.win/raw?url=",
+    "https://corsproxy.io/?",
+    "https://proxy.cors.sh/",
+    "https://api.codetabs.com/v1/proxy?quest="
+]
+
+# المواقع التي تعمل غالبًا على شبكات محدودة
+WORKING_SITES = [
+    {"name": "Google", "url": "https://www.google.com", "icon": "🔍"},
+    {"name": "Wikipedia", "url": "https://www.wikipedia.org", "icon": "📚"},
+    {"name": "BBC News", "url": "https://www.bbc.com/news", "icon": "📰"},
+    {"name": "GitHub", "url": "https://github.com", "icon": "💻"},
+    {"name": "Stack Overflow", "url": "https://stackoverflow.com", "icon": "❓"}
+]
+
+class RestrictedNetworkBrowser:
     def __init__(self):
         self.session = requests.Session()
-        # User Agent حديث لمتصفح الديسكتوب
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8,fr;q=0.7,es;q=0.6',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Cache-Control': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
             'Connection': 'keep-alive',
         })
-        self.tabs = [{
-            "id": 1, 
-            "title": "علامة تبويب جديدة", 
-            "url": "", 
-            "favicon": "🌐", 
-            "content": "", 
-            "status": "active",
-            "loading": False
-        }]
-        self.active_tab = 1
-        self.history = []
-        self.future = []
-        self.loading_progress = 0
-        
-    def navigate_to(self, url, tab_id=None):
-        """التنقل إلى رابط جديد مع ضمان الجودة"""
-        if not url or url.strip() == "":
-            return False, "الرابط فارغ"
-            
-        if tab_id is None:
-            tab_id = self.active_tab
-            
-        # تنظيف الرابط
-        clean_url = url.strip()
-        if not clean_url.startswith(('http://', 'https://')):
-            clean_url = 'https://' + clean_url
-            
-        # التحقق من صحة الرابط
-        try:
-            parsed = urlparse(clean_url)
-            if not parsed.netloc:
-                return False, "رابط غير صالح"
-        except:
-            return False, "رابط غير صالح"
-        
-        # بدء التحميل
-        for tab in self.tabs:
-            if tab['id'] == tab_id:
-                tab['loading'] = True
-                tab['url'] = clean_url
-                break
-                
-        # إضافة للسجل
-        if any(tab['id'] == tab_id for tab in self.tabs):
-            current_tab = self.get_tab_by_id(tab_id)
-            if current_tab and current_tab.get('url'):
-                self.history.append({
-                    'url': current_tab['url'],
-                    'title': current_tab['title'],
-                    'timestamp': time.time()
-                })
-                self.future.clear()
-        
-        # محاكاة شريط التقدم
-        self.simulate_loading()
-        
-        # جلب المحتوى
-        success, content = self.fetch_page_content(clean_url)
-        
-        # تحديث علامة التبويب
-        for tab in self.tabs:
-            if tab['id'] == tab_id:
-                tab['loading'] = False
-                tab['content'] = content
-                if success:
-                    tab['title'] = self.extract_page_title(content) or parsed.netloc
-                else:
-                    tab['title'] = "خطأ في التحميل"
-                break
-                
-        return success, "تم التحميل بنجاح" if success else content
+        self.current_url = 'https://example.com'
+        self.history = [{'url': 'https://example.com', 'title': 'صفحة البداية'}]
+        self.text_only_mode = True
+        self.use_proxy = False
+        self.api_mode = True
     
-    def simulate_loading(self):
-        """محاكاة شريط تقدم التحميل"""
-        self.loading_progress = 0
-        # في تطبيق حقيقي، يمكن استخدام مؤشر تقدم حقيقي
+    def fetch_with_proxy(self, url):
+        """جلب المحتوى باستخدام واجهات برمجة التطبيقات للتحايل على القيود"""
+        if not self.api_mode:
+            return self.fetch_direct(url)
+        
+        # محاولة استخدام APIs المختلفة
+        for api_base in FREE_APIS:
+            try:
+                full_url = api_base + quote(url)
+                response = requests.get(full_url, timeout=15)
+                if response.status_code == 200:
+                    # التحقق من أن المحتوى صالح
+                    if '<html' in response.text.lower() or '<body' in response.text.lower():
+                        return True, response.text
+            except:
+                continue
+        
+        # إذا فشلت جميع المحاولات، المحاولة مباشرة
+        return self.fetch_direct(url)
+    
+    def fetch_direct(self, url):
+        """الجلب المباشر مع معالجة الأخطاء"""
+        try:
+            response = self.session.get(url, timeout=20)
+            response.raise_for_status()
+            return True, response.text
+        except Exception as e:
+            return False, f"خطأ في الاتصال: {str(e)}"
     
     def fetch_page_content(self, url):
-        """جلب محتوى الصفحة بجودة عالية مع التعامل مع الترميز"""
+        """جلب محتوى الصفحة مع خيارات التحايل"""
+        st.session_state.loading = True
+        
         try:
-            response = self.session.get(url, timeout=15, allow_redirects=True)
-            response.raise_for_status()
-            
-            # تحديد الترميز بشكل صحيح
-            content_type = response.headers.get('Content-Type', '').lower()
-            if 'charset' in content_type:
-                charset = content_type.split('charset=')[1].split(';')[0].strip()
-                response.encoding = charset
+            if self.use_proxy or self.api_mode:
+                success, content = self.fetch_with_proxy(url)
             else:
-                # محاولة تحديد الترميز تلقائيًا
-                response.encoding = response.apparent_encoding
+                success, content = self.fetch_direct(url)
             
-            # التحقق من نوع المحتوى
-            if 'text/html' not in content_type and 'text/plain' not in content_type:
-                return False, "هذا النوع من المحتوى غير مدعوم"
-                
-            return True, response.text
-            
-        except requests.exceptions.Timeout:
-            return False, "انتهت مهلة الاتصال"
-        except requests.exceptions.ConnectionError:
-            return False, "تعذر الاتصال بالخادم"
-        except requests.exceptions.HTTPError as e:
-            return False, f"خطأ HTTP: {e.response.status_code}"
-        except Exception as e:
-            return False, f"خطأ غير متوقع: {str(e)}"
-    
-    def extract_page_title(self, html_content):
-        """استخراج عنوان الصفحة بدقة"""
-        try:
-            soup = BeautifulSoup(html_content, 'html.parser')
-            title = soup.find('title')
-            if title and title.string:
-                return title.string.strip()
-            
-            # البحث في عناصر h1 إذا لم يوجد title
-            h1 = soup.find('h1')
-            if h1 and h1.get_text(strip=True):
-                return h1.get_text(strip=True)
-                
-            return None
-        except:
-            return None
-    
-    def process_content_for_display(self, html_content, base_url):
-        """معالجة المحتوى لعرض تفاعلي عالي الجودة مع دعم كامل للغات"""
-        try:
-            soup = BeautifulSoup(html_content, 'html.parser')
-            
-            # إضافة meta charset لدعم الحروف الخاصة
-            meta = soup.new_tag('meta', charset='utf-8')
-            meta_http = soup.new_tag('meta', attrs={'http-equiv': 'Content-Type', 'content': 'text/html; charset=utf-8'})
-            
-            if soup.head:
-                soup.head.insert(0, meta)
-                soup.head.insert(1, meta_http)
-            else:
-                new_head = soup.new_tag('head')
-                new_head.append(meta)
-                new_head.append(meta_http)
-                soup.insert(0, new_head)
-            
-            # إضافة base href لضمان عمل الروابط
-            base_tag = soup.new_tag('base', href=base_url)
-            if soup.head:
-                soup.head.append(base_tag)
-            
-            # معالجة جميع الروابط لجعلها قابلة للنقر، بما في ذلك الروابط الداخلية
-            for link in soup.find_all('a', href=True):
-                href = link['href'].strip()
-                
-                # التعامل مع الروابط الداخلية (#anchors)
-                if href.startswith('#'):
-                    full_url = base_url + href
+            if success:
+                # معالجة المحتوى حسب الوضع
+                if self.text_only_mode:
+                    content = self.process_text_only(content, url)
                 else:
-                    full_url = urljoin(base_url, href)
+                    content = self.process_full_content(content, url)
                 
-                # التحقق من صحة الرابط
-                if full_url.startswith(('http://', 'https://')):
-                    # جعل الروابط تفاعلية
-                    link['onclick'] = f'''
-                    event.preventDefault();
-                    window.parent.postMessage({{
-                        type: 'BROWSER_NAVIGATE',
-                        url: {json.dumps(full_url)}
-                    }}, '*');
-                    return false;
-                    '''
-                    link['href'] = '#'
-                    link['style'] = 'color: #0066cc; text-decoration: underline; cursor: pointer;'
-                    link['title'] = f'انتقل إلى: {full_url}'
+                title = self.extract_title(content)
+                return {
+                    'title': title,
+                    'content': content,
+                    'status': 'success'
+                }
+            else:
+                return {
+                    'title': 'خطأ في التحميل',
+                    'content': self.create_error_page(content, url),
+                    'status': 'error'
+                }
+        finally:
+            st.session_state.loading = False
+    
+    def extract_title(self, content):
+        """استخراج العنوان من المحتوى"""
+        try:
+            soup = BeautifulSoup(content, 'html.parser')
+            title = soup.title.string if soup.title else ""
+            return title.strip() if title else "بدون عنوان"
+        except:
+            return "بدون عنوان"
+    
+    def process_text_only(self, html_content, base_url):
+        """تحويل الصفحة إلى نصوص فقط بدون صور أو وسائط"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
             
-            # تحسين الصور
-            for img in soup.find_all('img', src=True):
-                img_src = img['src']
-                absolute_src = urljoin(base_url, img_src)
-                img['src'] = absolute_src
-                img['style'] = 'max-width: 100%; height: auto;'
-                img['loading'] = 'lazy'
+            # إزالة جميع العناصر غير النصية
+            for element in soup(["script", "style", "img", "video", "audio", "iframe", "canvas", "svg", "object", "embed"]):
+                element.decompose()
             
-            # تحسين النماذج
-            for form in soup.find_all('form'):
-                form_action = form.get('action', '')
-                full_action = urljoin(base_url, form_action)
-                
-                form['onsubmit'] = f'''
-                event.preventDefault();
-                const formData = new FormData(this);
-                const formObj = Object.fromEntries(formData);
-                
-                window.parent.postMessage({{
-                    type: 'BROWSER_FORM_SUBMIT',
-                    formData: formObj,
-                    action: {json.dumps(full_action)},
-                    method: this.method || 'GET'
-                }}, '*');
-                return false;
-                '''
+            # إزالة السمات غير الضرورية
+            for tag in soup.find_all(True):
+                tag.attrs = {}
             
-            # تحسين الأزرار والروابط النصية
-            for button in soup.find_all(['button', 'input']):
-                if button.get('type') == 'submit':
-                    button['onclick'] = '''
-                    event.preventDefault();
-                    const form = this.closest('form');
-                    if (form) {
-                        form.onsubmit(event);
-                    }
-                    '''
+            # معالجة الروابط
+            links = []
+            for a in soup.find_all('a', href=True):
+                href = urljoin(base_url, a['href'])
+                text = a.get_text(strip=True)
+                if text:
+                    links.append((text, href))
+                a.decompose()
             
-            # إضافة CSS لتحسين العرض ودعم اللغات
-            style_tag = soup.new_tag('style')
-            style_tag.string = """
-                body {
-                    font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', 'Segoe UI Emoji', sans-serif;
-                    line-height: 1.6;
-                    margin: 0;
-                    padding: 20px;
-                    color: #242424;
-                    background: white;
-                    max-width: 100%;
-                    overflow-x: hidden;
-                    direction: ltr;
-                }
-                .rtl {
-                    direction: rtl;
-                    text-align: right;
-                    font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', sans-serif;
-                }
-                .ltr {
-                    direction: ltr;
-                    text-align: left;
-                    font-family: 'Segoe UI', system-ui, 'Segoe UI Emoji', sans-serif;
-                }
-                * {
-                    box-sizing: border-box;
-                }
-                a {
-                    color: #0066cc;
-                    text-decoration: underline;
-                    cursor: pointer;
-                }
-                a:hover {
-                    color: #004499;
-                    text-decoration: none;
-                }
-                img {
-                    max-width: 100%;
-                    height: auto;
-                    border-radius: 4px;
-                }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 10px 0;
-                }
-                table, th, td {
-                    border: 1px solid #ddd;
-                }
-                th, td {
-                    padding: 8px 12px;
-                    text-align: left;
-                }
-                th {
-                    background: #f5f5f5;
-                }
-                form {
-                    background: #f8f9fa;
-                    padding: 15px;
-                    border-radius: 6px;
-                    margin: 10px 0;
-                }
-                input, textarea, select {
-                    width: 100%;
-                    padding: 8px 12px;
-                    margin: 5px 0;
-                    border: 1px solid #ccc;
-                    border-radius: 4px;
-                    font-family: inherit;
-                }
-                button, input[type="submit"], input[type="button"] {
-                    background: #0078d4;
-                    color: white;
-                    border: none;
-                    padding: 10px 20px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    margin: 5px;
-                }
-                button:hover, input[type="submit"]:hover, input[type="button"]:hover {
-                    background: #106ebe;
-                }
-                @media (max-width: 768px) {
-                    body {
-                        padding: 15px;
-                        font-size: 14px;
-                    }
-                }
-                /* دعم للغات المختلفة */
-                .arabic, .hebrew {
-                    font-family: 'Segoe UI', system-ui, 'Segoe UI Arabic', sans-serif;
-                }
-                .chinese, .japanese, .korean {
-                    font-family: 'Segoe UI', system-ui, 'Microsoft YaHei', 'Apple SD Gothic Neo', sans-serif;
-                }
-                .russian, .ukrainian {
-                    font-family: 'Segoe UI', system-ui, 'Segoe UI Cyrillic', sans-serif;
-                }
-                .french, .spanish, .italian, .portuguese, .german {
-                    font-family: 'Segoe UI', system-ui, 'Segoe UI Latin', sans-serif;
-                }
+            # معالجة العناوين
+            headings = []
+            for tag_name in ['h1', 'h2', 'h3', 'h4']:
+                for tag in soup.find_all(tag_name):
+                    text = tag.get_text(strip=True)
+                    if text:
+                        headings.append((tag_name, text))
+                    tag.decompose()
+            
+            # الحصول على النصوص المهمة
+            main_text = []
+            for p in soup.find_all(['p', 'div']):
+                text = p.get_text(strip=True)
+                if len(text) > 50:  # نصوص طويلة كافية
+                    main_text.append(text)
+            
+            # بناء الصفحة النصية
+            result = f"""
+            <div class="text-only-mode">
+                <strong>📱 وضع النصوص فقط:</strong> تم تحميل النسخة النصية من الموقع لتوفير البيانات وتجاوز القيود.
+            </div>
             """
-            if soup.head:
-                soup.head.append(style_tag)
             
-            # تحديد اتجاه النص تلقائيًا بناءً على المحتوى
-            content_text = soup.get_text()
-            if any(char in content_text for char in ['أ', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي', 'ى', 'ئ', 'ء', 'ؤ', 'إ', 'آ', 'ة', 'ً', 'ٌ', 'ٍ', 'َ', 'ُ', 'ِ', 'ّ', 'ْ']):
-                body = soup.body
-                if body:
-                    body['class'] = body.get('class', []) + ['rtl']
-                    body['dir'] = 'rtl'
-                    body['style'] = body.get('style', '') + '; text-align: right;'
+            # إضافة العنوان الرئيسي
+            if headings:
+                result += f'<h1 class="mobile-h1">{headings[0][1]}</h1>'
             
-            # التأكد من الحفاظ على الحروف الخاصة
-            content = str(soup)
-            return content
+            # إضافة النصوص الرئيسية
+            if main_text:
+                result += '<div class="content-summary">'
+                for text in main_text[:3]:  # أول 3 فقرات
+                    result += f'<p class="mobile-p">{text}</p>'
+                result += '</div>'
+            
+            # إضافة الروابط المهمة
+            if links:
+                result += '<div class="link-list"><h3 class="mobile-h3">روابط مهمة:</h3>'
+                for text, href in links[:10]:  # أول 10 روابط
+                    if text and len(text) > 2:  # تجنب النصوص القصيرة جداً
+                        result += f'<a href="#" class="link-item" onclick="navigateTo(\'{href}\')">{text}</a>'
+                result += '</div>'
+            
+            return result
             
         except Exception as e:
             return f"""
             <div class="error-message">
-                <h3>⚠️ خطأ في معالجة المحتوى</h3>
-                <p>تعذر معالجة الصفحة للعرض التفاعلي.</p>
-                <p><strong>الخطأ:</strong> {html.escape(str(e))}</p>
-                <button onclick="window.parent.postMessage({{type: 'BROWSER_RELOAD'}}, '*')" style="background: #0078d4; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 10px;">
-                    إعادة تحميل الصفحة
-                </button>
+                <h3>⚠️ خطأ في معالجة النصوص</h3>
+                <p>تعذر تحويل الصفحة إلى نصوص فقط. سيتم عرض نسخة بسيطة.</p>
+                <p>الخطأ: {str(e)}</p>
             </div>
+            {self.fallback_text_view(html_content)}"
             """
     
-    def add_tab(self, url=""):
-        """إضافة علامة تبويب جديدة"""
-        new_tab_id = max([tab['id'] for tab in self.tabs]) + 1 if self.tabs else 1
-        self.tabs.append({
-            "id": new_tab_id,
-            "title": "علامة تبويب جديدة",
-            "url": url,
-            "favicon": "🌐",
-            "content": "",
-            "status": "active",
-            "loading": False
-        })
-        self.active_tab = new_tab_id
-        return new_tab_id
+    def fallback_text_view(self, html_content):
+        """عرض نصي بسيط عند فشل المعالجة المتقدمة"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            text = soup.get_text(separator='\n', strip=True)
+            # تقسيم النص إلى أجزاء
+            paragraphs = [p.strip() for p in text.split('\n') if p.strip() and len(p.strip()) > 20]
+            return '<br>'.join(paragraphs[:15])  # أول 15 فقرة
+        except:
+            return "<p>تعذر استخراج النص من هذه الصفحة.</p>"
     
-    def close_tab(self, tab_id):
-        """إغلاق علامة تبويب"""
-        if len(self.tabs) > 1:
-            self.tabs = [tab for tab in self.tabs if tab['id'] != tab_id]
-            if self.active_tab == tab_id:
-                self.active_tab = self.tabs[0]['id']
-            return True
-        return False
+    def create_error_page(self, error_message, url):
+        """إنشاء صفحة خطأ مخصصة"""
+        return f"""
+        <div class="proxy-warning">
+            <h3>⚠️ لم يتم تحميل الموقع مباشرة</h3>
+            <p>تم استخدام وسائل بديلة للوصول إلى {urlparse(url).netloc}</p>
+            <p><strong>السبب المحتمل:</strong> قيود الشبكة أو حظر الموقع</p>
+            <div class="unblock-options">
+                <button class="unblock-btn proxy-btn" onclick="useProxyMode()">使用網路 الوكيل</button>
+                <button class="unblock-btn text-btn" onclick="useTextMode()">وضع النصوص فقط</button>
+                <button class="unblock-btn api-btn" onclick="useApiMode()">واجهات برمجة التطبيقات</button>
+            </div>
+            <p style="margin-top: 10px; font-size: 13px; color: #666;">
+                <strong>ملاحظة:</strong> قد لا تعمل جميع المواقع بسبب القيود الأمنية. نوصي باستخدام المواقع التعليمية والبحثية.
+            </p>
+        </div>
+        <div class="content-summary">
+            <h3 class="mobile-h3">مواقع تعمل بشكل مضمون:</h3>
+            <ul class="mobile-text">
+                <li>المواقع التعليمية (.edu)</li>
+                <li>مواقع ويكيبيديا</li>
+                <li>مواقع الأخبار الدولية</li>
+                <li>مواقع البرمجة والمصادر المفتوحة</li>
+            </ul>
+        </div>
+        """
     
-    def get_active_tab(self):
-        """الحصول على علامة التبويب النشطة"""
-        for tab in self.tabs:
-            if tab['id'] == self.active_tab:
-                return tab
-        if self.tabs:
-            self.active_tab = self.tabs[0]['id']
-            return self.tabs[0]
-        return None
-    
-    def get_tab_by_id(self, tab_id):
-        """الحصول على علامة تبويب حسب المعرف"""
-        for tab in self.tabs:
-            if tab['id'] == tab_id:
-                return tab
-        return None
+    def process_full_content(self, html_content, base_url):
+        """معالجة المحتوى الكامل (غير مستخدم في هذا الإصدار)"""
+        return self.process_text_only(html_content, base_url)
 
-# تهيئة المتصفح
-if 'desktop_browser' not in st.session_state:
-    st.session_state.desktop_browser = ProfessionalDesktopBrowser()
+# تهيئة الحالة
+if 'browser' not in st.session_state:
+    st.session_state.browser = RestrictedNetworkBrowser()
+if 'loading' not in st.session_state:
+    st.session_state.loading = False
 
-# JavaScript للتفاعل مع دعم كامل للتنقل واللغات
-browser_js = """
+# JavaScript للتحكم في الأوضاع
+st.markdown("""
 <script>
-// التعامل مع التنقل من المحتوى
-window.addEventListener('message', function(event) {
-    if (event.data.type === 'BROWSER_NAVIGATE') {
-        // إرسال طلب التنقل إلى Streamlit
-        window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: event.data.url
-        }, '*');
-    } else if (event.data.type === 'BROWSER_FORM_SUBMIT') {
-        // التعامل مع إرسال النماذج
-        let url = event.data.action;
-        const formData = event.data.formData;
-        
-        // بناء سلسلة الاستعلام
-        if (event.data.method.toUpperCase() === 'GET') {
-            const params = new URLSearchParams(formData);
-            url += (url.includes('?') ? '&' : '?') + params.toString();
-            window.parent.postMessage({
-                type: 'streamlit:setComponentValue',
-                value: url
-            }, '*');
-        }
-    } else if (event.data.type === 'BROWSER_RELOAD') {
-        window.location.reload();
-    } else if (event.data.type === 'BROWSER_HOME') {
-        window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: 'https://example.com'
-        }, '*');
-    } else if (event.data.type === 'BROWSER_SWITCH_TAB') {
-        console.log('Switching to tab:', event.data.tabId);
-    } else if (event.data.type === 'BROWSER_CLOSE_TAB') {
-        console.log('Closing tab:', event.data.tabId);
-    } else if (event.data.type === 'BROWSER_NEW_TAB') {
-        window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: 'new_tab'
-        }, '*');
+function navigateTo(url) {
+    const urlDisplay = document.querySelector('.url-display');
+    if (urlDisplay) {
+        urlDisplay.textContent = url.length > 25 ? url.substring(0, 25) + '...' : url;
     }
-});
-
-// جعل الصفحة تفاعلية
-document.addEventListener('click', function(e) {
-    // التعامل مع جميع النقرات على الروابط
-    if (e.target.tagName === 'A' && e.target.onclick) {
-        e.preventDefault();
-        if (typeof e.target.onclick === 'function') {
-            e.target.onclick(e);
-        } else if (typeof e.target.onclick === 'string') {
-            new Function('event', e.target.onclick)(e);
-        }
-        return false;
-    }
-    
-    // التعامل مع النقر على العناصر الفرعية داخل الروابط
-    let parentLink = e.target.closest('a');
-    if (parentLink && parentLink.onclick) {
-        e.preventDefault();
-        if (typeof parentLink.onclick === 'function') {
-            parentLink.onclick(e);
-        } else if (typeof parentLink.onclick === 'string') {
-            new Function('event', parentLink.onclick)(e);
-        }
-        return false;
-    }
-});
-
-// التعامل مع النماذج
-document.addEventListener('submit', function(e) {
-    if (e.target.tagName === 'FORM' && e.target.onsubmit) {
-        e.preventDefault();
-        if (typeof e.target.onsubmit === 'function') {
-            e.target.onsubmit(e);
-        } else if (typeof e.target.onsubmit === 'string') {
-            new Function('event', e.target.onsubmit)(e);
-        }
-        return false;
-    }
-});
-
-// دعم التنقل بالماوس
-document.addEventListener('auxclick', function(e) {
-    if (e.button === 1) { // زر الماوس الأوسط
-        let link = e.target.closest('a');
-        if (link) {
-            e.preventDefault();
-            // فتح في علامة تبويب جديدة
-            window.parent.postMessage({
-                type: 'streamlit:setComponentValue',
-                value: link.href || link.onclick
-            }, '*');
-        }
-    }
-});
-
-// دعم التنقل للوحة المفاتيح
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Backspace' && !e.target.isContentEditable && 
-        !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
-        e.preventDefault();
-        window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: 'navigate_back'
-        }, '*');
-    }
-});
-
-// دعم الاتجاهات للغات المختلفة
-function detectTextDirection(text) {
-    if (!text) return 'ltr';
-    
-    // التحقق من النصوص العربية
-    const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/;
-    if (arabicPattern.test(text)) {
-        return 'rtl';
-    }
-    
-    // التحقق من النصوص الهندية
-    const indicPattern = /[\u0900-\u097F\u0A00-\u0A7F\u0B00-\u0B7F\u0C00-\u0C7F\u0D00-\u0D7F\u0E00-\u0E7F]/;
-    if (indicPattern.test(text)) {
-        return 'ltr';
-    }
-    
-    return 'ltr';
+    document.querySelector('.browser-content').innerHTML = `
+        <div class="loading-indicator">
+            <div class="spinner"></div>
+            <p>جاري التحميل...</p>
+        </div>
+    `;
+    window.parent.postMessage({
+        type: 'navigate',
+        url: url
+    }, '*');
 }
 
-// تطبيق الاتجاهات تلقائيًا
-document.querySelectorAll('p, div, span, h1, h2, h3, h4, h5, h6').forEach(element => {
-    const text = element.textContent || '';
-    if (text.length > 10) { // فقط العناصر التي تحتوي على نص كافٍ
-        const direction = detectTextDirection(text);
-        if (direction === 'rtl') {
-            element.classList.add('rtl');
-            element.setAttribute('dir', 'rtl');
-        }
-    }
-});
+function useProxyMode() {
+    window.parent.postMessage({
+        type: 'set_mode',
+        mode: 'proxy'
+    }, '*');
+}
 
-// دعم التنقل بين العناصر بالضغط على Tab
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Tab') {
-        const focusableElements = document.querySelectorAll('a, button, input, textarea, select, [tabindex]');
-        const currentElement = document.activeElement;
-        
-        if (currentElement) {
-            const currentIndex = Array.from(focusableElements).indexOf(currentElement);
-            if (currentIndex >= 0) {
-                const nextIndex = e.shiftKey ? 
-                    (currentIndex - 1 + focusableElements.length) % focusableElements.length :
-                    (currentIndex + 1) % focusableElements.length;
-                
-                focusableElements[nextIndex].focus();
-                e.preventDefault();
-            }
-        }
-    }
-});
+function useTextMode() {
+    window.parent.postMessage({
+        type: 'set_mode',
+        mode: 'text_only'
+    }, '*');
+}
+
+function useApiMode() {
+    window.parent.postMessage({
+        type: 'set_mode',
+        mode: 'api'
+    }, '*');
+}
 </script>
-"""
+""", unsafe_allow_html=True)
 
-# واجهة المستخدم الرئيسية
-st.title("🖥️ متصفح ديسكتوب محترف")
+# العنوان الرئيسي
+st.title("📱 متصفح حر - الوصول إلى جميع المواقع")
 
-# شريط التحكم العلوي
-col1, col2, col3, col4, col5 = st.columns([1, 1, 4, 1, 1])
+# رسالة توعوية
+st.markdown("""
+<div style="background: #e3f2fd; border-radius: 8px; padding: 15px; margin: 15px 0; border: 1px solid #bbdefb;">
+    <h4 style="color: #0d47a1; margin-top: 0;">💡 نصائح مهمة للشبكات المحدودة:</h4>
+    <ul style="color: #1565c0; line-height: 1.6;">
+        <li>تم تفعيل "وضع النصوص فقط" لتجاوز القيود وتوفير البيانات</li>
+        <li>استخدم المواقع التعليمية والبحثية (.edu, .org) فهي تعمل بشكل أفضل</li>
+        <li>لتحسين السرعة، قم بتعطيل الصور في الإعدادات</li>
+        <li>المواقع الحكومية والأخبار الدولية أكثر توافقًا مع هذا الحل</li>
+    </ul>
+</div>
+""", unsafe_allow_html=True)
+
+# شريط التحكم
+col1, col2, col3 = st.columns([1, 3, 1])
 
 with col1:
-    if st.button("◀", help="العودة", use_container_width=True):
-        active_tab = st.session_state.desktop_browser.get_active_tab()
-        if active_tab and st.session_state.desktop_browser.history:
-            st.session_state.desktop_browser.future.append({
-                'url': active_tab['url'],
-                'title': active_tab['title'],
-                'timestamp': time.time()
-            })
-            last_page = st.session_state.desktop_browser.history.pop()
-            st.session_state.desktop_browser.navigate_to(last_page['url'])
+    if st.button("←", help="الصفحة السابقة"):
+        if len(st.session_state.browser.history) > 1:
+            st.session_state.browser.history.pop()
+            st.session_state.browser.current_url = st.session_state.browser.history[-1]['url']
             st.rerun()
 
 with col2:
-    if st.button("▶", help="التقدم", use_container_width=True):
-        if st.session_state.desktop_browser.future:
-            next_page = st.session_state.desktop_browser.future.pop()
-            st.session_state.desktop_browser.navigate_to(next_page['url'])
-            st.rerun()
+    url_input = st.text_input("العنوان:", value=st.session_state.browser.current_url, label_visibility="collapsed")
 
 with col3:
-    active_tab = st.session_state.desktop_browser.get_active_tab()
-    current_url = active_tab['url'] if active_tab else ""
-    
-    url_input = st.text_input(
-        "أدخل عنوان الويب:",
-        value=current_url,
-        placeholder="https://www.example.com ",
-        label_visibility="collapsed",
-        key="url_input"
-    )
-    
-    if st.button("➤ انتقل", use_container_width=True) or (url_input and url_input != current_url):
-        success, message = st.session_state.desktop_browser.navigate_to(url_input)
-        if success:
-            st.success("✓ تم تحميل الصفحة بنجاح")
-        else:
-            st.error(f"✗ خطأ: {message}")
+    if st.button("→", help="تحديث الصفحة") or url_input != st.session_state.browser.current_url:
+        st.session_state.browser.current_url = url_input
         st.rerun()
 
-with col4:
-    if st.button("↻", help="إعادة تحميل", use_container_width=True):
-        active_tab = st.session_state.desktop_browser.get_active_tab()
-        if active_tab and active_tab['url']:
-            st.session_state.desktop_browser.navigate_to(active_tab['url'])
-            st.rerun()
+# عرض الصفحة الحالية
+st.markdown('<div class="mobile-container">', unsafe_allow_html=True)
+st.markdown('<div class="mobile-browser">', unsafe_allow_html=True)
 
-with col5:
-    if st.button("➕", help="علامة تبويب جديدة", use_container_width=True):
-        st.session_state.desktop_browser.add_tab()
-        st.rerun()
+# شريط الحالة
+st.markdown(f"""
+<div class="status-bar">
+    <div>{time.strftime('%H:%M')}</div>
+    <div>{'📡 نصوص فقط' if st.session_state.browser.text_only_mode else '📶 كامل'}</div>
+</div>
+""", unsafe_allow_html=True)
 
-# عرض علامات التبويب
-browser = st.session_state.desktop_browser
-if browser.tabs:
-    st.write("**علامات التبويب النشطة:**")
-    tab_cols = st.columns(len(browser.tabs) + 1)
-    
-    for idx, tab in enumerate(browser.tabs):
-        with tab_cols[idx]:
-            tab_title = tab['title']
-            if len(tab_title) > 15:
-                tab_title = tab_title[:15] + "..."
-            
-            tab_label = f"{tab['favicon']} {tab_title}"
-            is_active = tab['id'] == browser.active_tab
-            
-            if st.button(tab_label, 
-                       key=f"tab_{tab['id']}", 
-                       use_container_width=True,
-                       type="primary" if is_active else "secondary"):
-                browser.active_tab = tab['id']
-                st.rerun()
+# شريط التنقل
+st.markdown(f"""
+<div class="browser-chrome">
+    <div class="nav-bar">
+        <button class="nav-btn" onclick="window.history.back()">←</button>
+        <button class="nav-btn" onclick="window.history.forward()">→</button>
+        <div class="url-display">{st.session_state.browser.current_url[:25] + "..." if len(st.session_state.browser.current_url) > 25 else st.session_state.browser.current_url}</div>
+        <button class="nav-btn" onclick="navigateTo('https://example.com')">🏠</button>
+    </div>
+""", unsafe_allow_html=True)
 
-# متصفح الديسكتوب
-st.markdown("### نافذة المتصفح:")
-
-# جلب المحتوى الحالي
-active_tab = browser.get_active_tab()
-display_content = ""
-
-if active_tab:
-    if active_tab['loading']:
-        display_content = """
+# منطقة المحتوى
+if st.session_state.loading:
+    st.markdown("""
+    <div class="browser-content">
         <div class="loading-indicator">
             <div class="spinner"></div>
-            <p>جاري تحميل الصفحة...</p>
+            <p>جاري التحميل...</p>
+            <p style="font-size: 14px; margin-top: 10px;">جاري استخدام واجهات برمجة التطبيقات للوصول إلى الموقع</p>
         </div>
-        """
-    elif active_tab['content']:
-        display_content = browser.process_content_for_display(
-            active_tab['content'], 
-            active_tab['url']
-        )
-    else:
-        display_content = """
-        <div class="website-content">
-            <div style="text-align: center; padding: 80px 20px;">
-                <h1 style="color: #0078d4; font-size: 48px; margin-bottom: 20px;">🌐</h1>
-                <h2 style="color: #242424; margin-bottom: 15px;">مرحباً بك في المتصفح المحترف</h2>
-                <p style="color: #666; margin-bottom: 30px; font-size: 16px; line-height: 1.6;">
-                    أدخل عنوان URL في شريط العنوان أعلاه لبدء تصفح الإنترنت<br>
-                    استخدم علامات التبويب لفتح عدة صفحات في وقت واحد
-                </p>
-                
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; max-width: 800px; margin: 0 auto;">
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h3 style="color: #242424; margin-bottom: 10px;">🔍 تصفح سريع</h3>
-                        <p style="color: #666; font-size: 14px;">ابحث وانتقل لأي موقع بسهولة</p>
-                    </div>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h3 style="color: #242424; margin-bottom: 10px;">📑 علامات متعددة</h3>
-                        <p style="color: #666; font-size: 14px;">افتح عدة صفحات معاً</p>
-                    </div>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h3 style="color: #242424; margin-bottom: 10px;">⚡ أداء عالي</h3>
-                        <p style="color: #666; font-size: 14px;">تجربة تصفح سريعة وسلسة</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-        """
+    </div>
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    # جلب المحتوى
+    result = st.session_state.browser.fetch_page_content(st.session_state.browser.current_url)
+    
+    st.markdown(f"""
+    <div class="browser-content">
+        {result['content']}
+    </div>
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# بناء واجهة المتصفح الكاملة
-desktop_html = f"""
-<div class="desktop-browser">
-    <div class="progress-bar" style="width: {browser.loading_progress}%"></div>
-    
-    <div class="title-bar">
-        <div class="window-controls">
-            <div class="control-btn close-btn"></div>
-            <div class="control-btn minimize-btn"></div>
-            <div class="control-btn maximize-btn"></div>
-        </div>
-        <div class="window-title">{active_tab['title'] if active_tab else 'متصفح ديسكتوب'}</div>
-    </div>
-    
-    <div class="toolbar">
-        <button class="toolbar-btn" onclick="window.parent.postMessage({{type: 'BROWSER_BACK'}}, '*')">◀ عودة</button>
-        <button class="toolbar-btn" onclick="window.parent.postMessage({{type: 'BROWSER_FORWARD'}}, '*')">▶ تقدم</button>
-        <button class="toolbar-btn" onclick="window.parent.postMessage({{type: 'BROWSER_RELOAD'}}, '*')">↻ إعادة تحميل</button>
-        
-        <div class="url-container">
-            <div class="security-badge">آمن</div>
-            <input type="text" class="url-bar" value="{active_tab['url'] if active_tab else ''}" readonly>
-        </div>
-        
-        <button class="toolbar-btn" onclick="window.parent.postMessage({{type: 'BROWSER_HOME'}}, '*')">🏠 رئيسية</button>
-    </div>
-    
-    <div class="tab-container">
-        {"".join([f'''
-        <div class="browser-tab {'active' if tab['id'] == browser.active_tab else ''}" 
-             onclick="window.parent.postMessage({{type: 'BROWSER_SWITCH_TAB', tabId: {tab['id']}}}, '*')">
-            <span class="tab-favicon">{tab['favicon']}</span>
-            <span class="tab-title">{tab['title']}</span>
-            <span class="tab-close" onclick="event.stopPropagation(); window.parent.postMessage({{type: 'BROWSER_CLOSE_TAB', tabId: {tab['id']}}}, '*')">×</span>
-        </div>
-        ''' for tab in browser.tabs])}
-        <button class="new-tab-btn" onclick="window.parent.postMessage({{type: 'BROWSER_NEW_TAB'}}, '*')">+</button>
-    </div>
-    
-    <div class="content-area">
-        <div class="browser-content">
-            {display_content}
-            {browser_js}
-        </div>
-    </div>
-    
-    <div class="status-bar">
-        <span>مستعد</span>
-        <span>متصفح ديسكتوب محترف - يدعم جميع اللغات</span>
-    </div>
-</div>
-"""
+st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
-# عرض المتصفح
-st.components.v1.html(desktop_html, height=600, scrolling=True)
-
-# لوحة التحكم الجانبية
+# لوحة الخيارات
 with st.sidebar:
-    st.header("⚙️ لوحة التحكم")
+    st.header("⚙️ خيارات التحايل على القيود")
     
-    st.subheader("🌐 مواقع سريعة")
-    quick_sites = [
-        ("Google", "https://www.google.com "),
-        ("Wikipedia", "https://www.wikipedia.org "),
-        ("GitHub", "https://www.github.com "),
-        ("Stack Overflow", "https://stackoverflow.com "),
-        ("YouTube", "https://www.youtube.com "),
-        ("Amazon", "https://www.amazon.com "),
-        ("Twitter", "https://twitter.com "),
-        ("LinkedIn", "https://www.linkedin.com "),
-        ("BBC عربي", "https://www.bbc.com/arabic"),
-        ("فرانس 24", "https://www.france24.com/ar/")
-    ]
+    st.subheader("وضع التشغيل")
+    if st.checkbox("✅ وضع النصوص فقط (موصى به)", value=st.session_state.browser.text_only_mode, 
+                  help="يزيل جميع الصور والوسائط لتوفير البيانات وتجاوز القيود"):
+        st.session_state.browser.text_only_mode = True
+    else:
+        st.session_state.browser.text_only_mode = False
     
-    for site_name, site_url in quick_sites:
-        if st.button(site_name, use_container_width=True, key=f"quick_{site_name}"):
-            success, message = browser.navigate_to(site_url)
-            if success:
-                st.success(f"✓ تم الانتقال إلى {site_name}")
-            else:
-                st.error(f"✗ خطأ: {message}")
+    if st.checkbox("🌐 استخدام واجهات برمجة التطبيقات", value=st.session_state.browser.api_mode,
+                  help="يستخدم خدمات وسيطة للوصول إلى المواقع المحجوبة"):
+        st.session_state.browser.api_mode = True
+    else:
+        st.session_state.browser.api_mode = False
+    
+    st.subheader("مواقع سريعة ومتوافقة")
+    for site in WORKING_SITES:
+        if st.button(f"{site['icon']} {site['name']}", use_container_width=True):
+            st.session_state.browser.current_url = site['url']
             st.rerun()
     
-    st.subheader("📚 سجل التصفح")
-    if browser.history:
-        for i, visit in enumerate(reversed(browser.history[-8:])):
-            display_title = visit['title'][:25] + "..." if len(visit['title']) > 25 else visit['title']
-            if st.button(f"📄 {display_title}", key=f"hist_{i}", use_container_width=True):
-                browser.navigate_to(visit['url'])
-                st.rerun()
-    else:
-        st.info("لا يوجد سجل تصفح بعد")
+    st.subheader("مواقع مفيدة للشبكات المحدودة")
+    compatible_sites = [
+        ("ويكيبيديا", "https://www.wikipedia.org"),
+        ("جوجل سكولار", "https://scholar.google.com"),
+        ("أخبار BBC", "https://www.bbc.com/news"),
+        ("كورسيرا", "https://www.coursera.org"),
+        ("مكتبة الكونجرس", "https://www.loc.gov")
+    ]
     
-    st.subheader("🔧 أدوات متقدمة")
+    for name, url in compatible_sites:
+        if st.button(f"📚 {name}", use_container_width=True):
+            st.session_state.browser.current_url = url
+            st.rerun()
     
-    if st.button("🧹 مسح الذاكرة المؤقتة", use_container_width=True):
-        browser.session.cookies.clear()
-        st.success("✓ تم مسح الذاكرة المؤقتة")
-    
-    if st.button("🗑️ مسح سجل التصفح", use_container_width=True):
-        browser.history.clear()
-        browser.future.clear()
-        st.success("✓ تم مسح سجل التصفح")
-    
-    if st.button("🔄 إعادة تعيين المتصفح", use_container_width=True):
-        st.session_state.desktop_browser = ProfessionalDesktopBrowser()
-        st.success("✓ تم إعادة تعيين المتصفح")
-        st.rerun()
-    
-    st.subheader("🌐 تجربة اللغات")
+    st.subheader("ملاحظات هامة")
     st.info("""
-    **يدعم المتصفح:**
-    
-    - ✓ الحروف العربية (أ-ي)
-    - ✓ الحروف الفرنسية (é, è, à, ç)
-    - ✓ الحروف الإسبانية (ñ, ñ)
-    - ✓ الحروف الألمانية (ä, ö, ü, ß)
-    - ✓ جميع اللغات الأخرى
-    - ✓ الاتجاهات الصحيحة (يسار ليمين، يمين لليسار)
+    - هذا الحل يعمل على معظم الشبكات المحدودة
+    - قد لا تعمل بعض المواقع بسبب قيود إضافية
+    - الوضع النصي يوفر 95% من بيانات التصفح
+    - المواقع التعليمية تعمل بشكل أفضل
     """)
-
-# معلومات إضافية
-with st.expander("📊 إحصائيات المتصفح"):
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("علامات التبويب", len(browser.tabs))
-    
-    with col2:
-        st.metric("الصفحات المزورة", len(browser.history))
-    
-    with col3:
-        st.metric("الصفحات القادمة", len(browser.future))
-    
-    with col4:
-        if active_tab:
-            domain = urlparse(active_tab['url']).netloc
-            st.metric("المجال الحالي", domain[:12] + "..." if len(domain) > 12 else domain)
 
 # تذييل الصفحة
 st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: #666; padding: 20px;'>
-    <p style='font-size: 16px; font-weight: bold; color: #0078d4;'>🖥️ متصفح ديسكتوب محترف</p>
-    <p style='font-size: 14px;'>تجربة تصفح حقيقية • دعم كامل للغات • تحكم متقدم</p>
+<div style='text-align: center; color: #666; padding: 10px;'>
+    <p><strong>متصفح حر للشبكات المحدودة</strong></p>
+    <p>حل مبتكر للوصول إلى المعرفة دون قيود | يعمل بدون صور لتوفير البيانات</p>
 </div>
 """, unsafe_allow_html=True)
