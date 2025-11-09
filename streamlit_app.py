@@ -5,9 +5,6 @@ import json
 import time
 import os
 from urllib.parse import urljoin, urlparse
-import base64
-from PIL import Image
-import io
 import re
 
 # إعدادات الجلسة
@@ -53,15 +50,20 @@ st.markdown("""
         border: none;
         cursor: pointer;
         transition: all 0.2s;
+        background: #e0e0e0;
     }
     
     .browser-btn:hover {
+        background: #d0d0d0;
         transform: scale(1.05);
     }
     
-    .btn-close { background: #ff5f57; color: white; }
-    .btn-minimize { background: #ffbd2e; color: white; }
-    .btn-maximize { background: #28ca42; color: white; }
+    .url-bar-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
     
     .url-bar {
         flex: 1;
@@ -75,14 +77,6 @@ st.markdown("""
         gap: 8px;
     }
     
-    .url-bar input {
-        border: none;
-        outline: none;
-        flex: 1;
-        font-size: 14px;
-        background: transparent;
-    }
-    
     .security-icon {
         color: #4CAF50;
         font-size: 16px;
@@ -93,6 +87,7 @@ st.markdown("""
         border-bottom: 1px solid #e0e0e0;
         display: flex;
         padding: 0 16px;
+        overflow-x: auto;
     }
     
     .browser-tab {
@@ -196,10 +191,6 @@ st.markdown("""
         font-weight: 500;
     }
     
-    .nav-links a:hover {
-        color: #007bff;
-    }
-    
     .content-grid {
         display: grid;
         grid-template-columns: 2fr 1fr;
@@ -228,11 +219,6 @@ st.markdown("""
         margin-bottom: 20px;
     }
     
-    .article-card h3 {
-        color: #333;
-        margin-bottom: 10px;
-    }
-    
     .website-footer {
         background: #343a40;
         color: white;
@@ -242,7 +228,6 @@ st.markdown("""
         margin-top: 40px;
     }
     
-    /* محاكاة عناصر الويب */
     .web-button {
         background: #007bff;
         color: white;
@@ -268,17 +253,6 @@ st.markdown("""
         border-radius: 8px;
         margin: 20px 0;
     }
-    
-    /* حالة التحميل */
-    .loading-bar {
-        height: 3px;
-        background: linear-gradient(90deg, #007bff, #00c851);
-        width: 0%;
-        transition: width 0.3s;
-        position: absolute;
-        top: 0;
-        left: 0;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -286,7 +260,7 @@ class RealBrowserSimulator:
     def __init__(self):
         self.session = requests.Session()
         self.current_url = ""
-        self.tabs = [{"id": 1, "title": "علامة تبويب جديدة", "url": "", "favicon": "🌐", "content": ""}]
+        self.tabs = [{"id": 1, "title": "علامة تبويب جديدة", "url": "", "favicon": "🌐", "content": "", "status": "active"}]
         self.active_tab = 1
         self.history = []
         self.session.headers.update({
@@ -297,6 +271,9 @@ class RealBrowserSimulator:
     
     def navigate(self, url, tab_id=None):
         """التنقل إلى رابط في علامة تبويب محددة"""
+        if not url:
+            return False
+            
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
             
@@ -339,16 +316,22 @@ class RealBrowserSimulator:
     
     def extract_title(self, html_content):
         """استخراج عنوان الصفحة"""
-        soup = BeautifulSoup(html_content, 'html.parser')
-        title = soup.title
-        return title.string.strip() if title else "بدون عنوان"
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            title = soup.title
+            return title.string.strip() if title and title.string else "بدون عنوان"
+        except:
+            return "بدون عنوان"
     
     def extract_favicon(self, html_content, base_url):
         """استخراج الأيقونة"""
-        soup = BeautifulSoup(html_content, 'html.parser')
-        favicon = soup.find('link', rel=lambda x: x and 'icon' in x.lower())
-        if favicon and favicon.get('href'):
-            return favicon['href']
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            favicon = soup.find('link', rel=lambda x: x and 'icon' in x.lower())
+            if favicon and favicon.get('href'):
+                return favicon['href']
+        except:
+            pass
         return "🌐"
     
     def create_error_page(self, error, url):
@@ -369,7 +352,6 @@ class RealBrowserSimulator:
                         <li>تحقق من كتابة العنوان</li>
                         <li>جرب استخدام HTTPS بدلاً من HTTP</li>
                     </ul>
-                    <button class="web-button" onclick="window.location.reload()">إعادة المحاولة</button>
                 </div>
             </div>
         </div>
@@ -383,7 +365,8 @@ class RealBrowserSimulator:
             "title": "علامة تبويب جديدة",
             "url": url,
             "favicon": "🌐",
-            "content": ""
+            "content": "",
+            "status": "active"
         })
         self.active_tab = new_tab_id
         return new_tab_id
@@ -400,162 +383,126 @@ class RealBrowserSimulator:
         for tab in self.tabs:
             if tab['id'] == self.active_tab:
                 return tab
-        return self.tabs[0]
+        return self.tabs[0] if self.tabs else None
 
 # تهيئة المتصفح في حالة الجلسة
 if 'browser' not in st.session_state:
     st.session_state.browser = RealBrowserSimulator()
 
-# الواجهة الرئيسية للمتصفح
-st.markdown("""
-<div class="browser-container">
-    <div class="loading-bar" id="loadingBar"></div>
-    <div class="browser-toolbar">
-        <div class="browser-controls">
-            <div class="browser-btn btn-close" title="إغلاق">×</div>
-            <div class="browser-btn btn-minimize" title="تصغير">–</div>
-            <div class="browser-btn btn-maximize" title="تكبير">□</div>
-        </div>
+# العنوان الرئيسي
+st.title("🌐 متصفح ويب محاكي حقيقي")
+
+# شريط العنوان والمتصفح
+st.markdown('<div class="browser-container">', unsafe_allow_html=True)
+
+# شريط أدوات المتصفح
+col1, col2, col3, col4 = st.columns([1, 2, 1, 1])
+with col1:
+    st.markdown('<div class="browser-controls">', unsafe_allow_html=True)
+    if st.button("←", help="السابق"):
+        pass
+    if st.button("→", help="التالي"):
+        pass
+    if st.button("↻", help="إعادة التحميل"):
+        if st.session_state.browser.get_active_tab() and st.session_state.browser.get_active_tab()['url']:
+            st.session_state.browser.navigate(st.session_state.browser.get_active_tab()['url'])
+    st.markdown('</div>', unsafe_allow_html=True)
+
+with col2:
+    # شريط العنوان
+    current_url = st.session_state.browser.get_active_tab()['url'] if st.session_state.browser.get_active_tab() else ""
+    url_input = st.text_input(
+        "أدخل عنوان الويب",
+        value=current_url,
+        placeholder="https://www.example.com",
+        label_visibility="collapsed"
+    )
+    
+    # معالجة إدخال العنوان
+    if url_input and url_input != current_url:
+        st.session_state.browser.navigate(url_input)
+
+with col3:
+    if st.button("☆", help="الإشارات المرجعية"):
+        st.info("ميزة الإشارات المرجعية قريباً!")
+
+with col4:
+    if st.button("☰", help="القائمة"):
+        st.info("قائمة المتصفح")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# علامات التبويب
+st.markdown('<div class="browser-tabs">', unsafe_allow_html=True)
+
+# عرض علامات التبويب الحالية
+cols = st.columns(len(st.session_state.browser.tabs) + 1)
+for idx, tab in enumerate(st.session_state.browser.tabs):
+    with cols[idx]:
+        tab_label = f"{tab['favicon']} {tab['title'][:15]}..."
+        is_active = "🟢" if tab['id'] == st.session_state.browser.active_tab else "⚪"
         
-        <div class="browser-controls">
-            <button class="browser-btn" title="السابق" onclick="handleBack()">←</button>
-            <button class="browser-btn" title="التالي" onclick="handleForward()">→</button>
-            <button class="browser-btn" title="إعادة التحميل" onclick="handleReload()">↻</button>
-        </div>
-        
-        <div class="url-bar">
-            <span class="security-icon">🔒</span>
-            <input type="text" id="urlInput" placeholder="ابحث أو أدخل عنوان الويب" 
-                   value="{current_url}">
-            <button class="browser-btn" title="الذهاب" onclick="handleNavigate()">↵</button>
-        </div>
-        
-        <div class="browser-controls">
-            <button class="browser-btn" title="الإشارات المرجعية">☆</button>
-            <button class="browser-btn" title="التاريخ">☰</button>
-        </div>
-    </div>
-    
-    <div class="browser-tabs">
-        {tabs_html}
-        <button class="new-tab-btn" title="علامة تبويب جديدة" onclick="handleNewTab()">+</button>
-    </div>
-    
-    <div class="browser-content" id="browserContent">
-        {content_html}
-    </div>
-</div>
-""", unsafe_allow_html=True)
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            if st.button(f"{is_active} {tab_label}", key=f"tab_{tab['id']}", use_container_width=True):
+                st.session_state.browser.active_tab = tab['id']
+        with col2:
+            if st.button("×", key=f"close_{tab['id']}", help="إغلاق علامة التبويب"):
+                st.session_state.browser.close_tab(tab['id'])
+                st.rerun()
 
-# JavaScript للتحكم في المتصفح
-st.markdown("""
-<script>
-function handleNavigate() {
-    const url = document.getElementById('urlInput').value;
-    window.location.href = window.location.pathname + '?url=' + encodeURIComponent(url);
-}
-
-function handleNewTab() {
-    // إضافة علامة تبويب جديدة
-    window.location.href = window.location.pathname + '?new_tab=true';
-}
-
-function handleTabClick(tabId) {
-    window.location.href = window.location.pathname + '?tab=' + tabId;
-}
-
-function handleCloseTab(tabId, event) {
-    event.stopPropagation();
-    window.location.href = window.location.pathname + '?close_tab=' + tabId;
-}
-
-function handleBack() {
-    // الرجوع للخلف
-    window.location.href = window.location.pathname + '?action=back';
-}
-
-function handleForward() {
-    // التقدم للأمام
-    window.location.href = window.location.pathname + '?action=forward';
-}
-
-function handleReload() {
-    // إعادة التحميل
-    window.location.href = window.location.pathname + '?action=reload';
-}
-
-// محاكاة شريط التحميل
-function simulateLoading() {
-    const loadingBar = document.getElementById('loadingBar');
-    let width = 0;
-    const interval = setInterval(() => {
-        if (width >= 100) {
-            clearInterval(interval);
-            loadingBar.style.width = '0%';
-        } else {
-            width += Math.random() * 10;
-            loadingBar.style.width = width + '%';
-        }
-    }, 100);
-}
-
-// بدء محاكاة التحميل عند فتح الصفحة
-setTimeout(simulateLoading, 500);
-</script>
-""", unsafe_allow_html=True)
-
-# معالجة الأحداث من JavaScript
-def handle_browser_events():
-    query_params = st.experimental_get_query_params()
-    
-    # التنقل إلى رابط
-    if 'url' in query_params:
-        url = query_params['url'][0]
-        st.session_state.browser.navigate(url)
-        st.experimental_set_query_params()
-    
-    # علامة تبويب جديدة
-    if 'new_tab' in query_params:
+# زر إضافة علامة تبويب جديدة
+with cols[-1]:
+    if st.button("+", help="علامة تبويب جديدة", use_container_width=True):
         st.session_state.browser.add_tab()
-        st.experimental_set_query_params()
-    
-    # تغيير علامة التبويب
-    if 'tab' in query_params:
-        tab_id = int(query_params['tab'][0])
-        st.session_state.browser.active_tab = tab_id
-        st.experimental_set_query_params()
-    
-    # إغلاق علامة تبويب
-    if 'close_tab' in query_params:
-        tab_id = int(query_params['close_tab'][0])
-        st.session_state.browser.close_tab(tab_id)
-        st.experimental_set_query_params()
+        st.rerun()
 
-# تشغيل معالجة الأحداث
-handle_browser_events()
+st.markdown('</div>', unsafe_allow_html=True)
 
-# تحديث واجهة المتصفح
-def update_browser_interface():
-    browser = st.session_state.browser
-    active_tab = browser.get_active_tab()
-    
-    # تحديث شريط العنوان
-    current_url = active_tab['url'] if active_tab['url'] else "about:blank"
-    
-    # إنشاء HTML لعلامات التبويب
-    tabs_html = ""
-    for tab in browser.tabs:
-        is_active = "active" if tab['id'] == browser.active_tab else ""
-        tabs_html += f"""
-        <div class="browser-tab {is_active}" onclick="handleTabClick({tab['id']})">
-            <span class="tab-favicon">{tab['favicon']}</span>
-            <span class="tab-title">{tab['title']}</span>
-            <span class="tab-close" onclick="handleCloseTab({tab['id']}, event)">×</span>
-        </div>
-        """
-    
-    # عرض محتوى الصفحة النشطة
-    content_html = active_tab['content'] if active_tab['content'] else """
+# محتوى المتصفح
+st.markdown('<div class="browser-content">', unsafe_allow_html=True)
+
+active_tab = st.session_state.browser.get_active_tab()
+if active_tab and active_tab['content']:
+    # عرض محتوى الصفحة
+    try:
+        soup = BeautifulSoup(active_tab['content'], 'html.parser')
+        
+        # استخراج وتحسين المحتوى للعرض
+        title = soup.title.string if soup.title else "بدون عنوان"
+        st.subheader(title)
+        
+        # عرض النص الرئيسي
+        texts = []
+        for element in soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+            text = element.get_text(strip=True)
+            if text and len(text) > 20:
+                texts.append(text)
+        
+        for text in texts[:10]:  # عرض أول 10 نصوص فقط
+            st.write(text)
+            st.divider()
+            
+        # عرض الروابط
+        links = []
+        for link in soup.find_all('a', href=True):
+            link_text = link.get_text(strip=True)
+            if link_text:
+                links.append((link_text, link['href']))
+        
+        if links:
+            with st.expander(f"🔗 الروابط ({len(links)})"):
+                for i, (text, href) in enumerate(links[:20]):
+                    full_url = urljoin(active_tab['url'], href)
+                    st.write(f"{i+1}. **{text}**")
+                    st.caption(full_url)
+                    
+    except Exception as e:
+        st.error(f"خطأ في معالجة المحتوى: {e}")
+        st.code(active_tab['content'][:2000])
+else:
+    # الصفحة الافتراضية
+    st.markdown("""
     <div class="website-content">
         <div class="website-header">
             <h1>🌐 المتصفح المحاكي</h1>
@@ -586,27 +533,20 @@ def update_browser_interface():
             <div class="sidebar">
                 <h3>مواقع مقترحة</h3>
                 <div class="web-form">
-                    <button class="web-button" onclick="window.location.href='?url=google.com'">Google</button>
-                    <button class="web-button" onclick="window.location.href='?url=wikipedia.org'">Wikipedia</button>
-                    <button class="web-button" onclick="window.location.href='?url=github.com'">GitHub</button>
-                    <button class="web-button" onclick="window.location.href='?url=stackoverflow.com'">Stack Overflow</button>
+                    <p>جرب هذه المواقع:</p>
+                    <ul>
+                        <li><a href="#" onclick="window.location.href='?url=google.com'">Google</a></li>
+                        <li><a href="#" onclick="window.location.href='?url=wikipedia.org'">Wikipedia</a></li>
+                        <li><a href="#" onclick="window.location.href='?url=github.com'">GitHub</a></li>
+                    </ul>
                 </div>
-                
-                <h3>إحصائيات</h3>
-                <p>علامات التبويب المفتوحة: {tabs_count}</p>
-                <p>الصفحات المزورة: {history_count}</p>
             </div>
         </div>
     </div>
-    """.format(
-        tabs_count=len(browser.tabs),
-        history_count=len(browser.history)
-    )
-    
-    return current_url, tabs_html, content_html
+    """, unsafe_allow_html=True)
 
-# تحديث الواجهة
-current_url, tabs_html, content_html = update_browser_interface()
+st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)  # إغلاق container المتصفح
 
 # لوحة التحكم الجانبية
 with st.sidebar:
@@ -614,13 +554,14 @@ with st.sidebar:
     
     st.subheader("علامات التبويب المفتوحة")
     for tab in st.session_state.browser.tabs:
-        if st.button(f"🔗 {tab['title'][:20]}...", key=f"tab_{tab['id']}", use_container_width=True):
+        tab_text = f"{tab['favicon']} {tab['title'][:20]}..."
+        if st.button(tab_text, key=f"sidebar_tab_{tab['id']}", use_container_width=True):
             st.session_state.browser.active_tab = tab['id']
             st.rerun()
     
     st.subheader("سجل التصفح")
     if st.session_state.browser.history:
-        for i, visit in enumerate(reversed(st.session_state.browser.history[-10:])):
+        for i, visit in enumerate(reversed(st.session_state.browser.history[-5:])):
             if st.button(f"📄 {visit['title'][:25]}...", key=f"hist_{i}", use_container_width=True):
                 st.session_state.browser.navigate(visit['url'])
                 st.rerun()
@@ -628,14 +569,18 @@ with st.sidebar:
         st.info("لا يوجد سجل تصفح بعد")
     
     st.subheader("أدوات متقدمة")
-    if st.button("🧹 مسح الذاكرة المؤقتة"):
-        st.session_state.browser.session.cookies.clear()
-        st.success("تم مسح الذاكرة المؤقتة")
+    col1, col2 = st.columns(2)
     
-    if st.button("🔄 إعادة تعيين المتصفح"):
-        st.session_state.browser = RealBrowserSimulator()
-        st.success("تم إعادة تعيين المتصفح")
-        st.rerun()
+    with col1:
+        if st.button("🧹 مسح الذاكرة"):
+            st.session_state.browser.session.cookies.clear()
+            st.success("تم مسح الذاكرة المؤقتة")
+    
+    with col2:
+        if st.button("🔄 إعادة تعيين"):
+            st.session_state.browser = RealBrowserSimulator()
+            st.success("تم إعادة تعيين المتصفح")
+            st.rerun()
 
 # معلومات إضافية
 with st.expander("📊 معلومات المتصفح"):
@@ -649,7 +594,10 @@ with st.expander("📊 معلومات المتصفح"):
     
     with col3:
         active_tab = st.session_state.browser.get_active_tab()
-        st.metric("الصفحة النشطة", active_tab['title'][:15] + "...")
+        if active_tab:
+            st.metric("الصفحة النشطة", active_tab['title'][:15] + "...")
+        else:
+            st.metric("الصفحة النشطة", "لا يوجد")
 
 # تذييل الصفحة
 st.markdown("---")
