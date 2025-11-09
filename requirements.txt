@@ -7,4 +7,4 @@ webdriver-manager
 # webdriver-manager (مذكورة أعلاه) تستخدم لتنزيل chromedriver تلقائيًا
 
 # مكتبة Chromium (اختياري، قد تحتاجها في بعض الأحيان على Streamlit Cloud)
-pychromeless
+
