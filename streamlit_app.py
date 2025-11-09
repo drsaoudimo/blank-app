@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PPFO v30.0 Streamlit Web Application 
-نسخة متعددة اللغات مع دعم كامل للصيغ الرياضية الجميلة
+PPFO v29.1 Streamlit Web Application 
+نسخة محسنة مع دعم متعدد اللغات وخدمات رياضية متقدمة
 """
 
 import streamlit as st
@@ -11,239 +11,423 @@ from functools import lru_cache
 from collections import Counter
 import numpy as np
 import plotly.graph_objects as go
+import json
 import sys
 
-# 🌐 نظام اللغات المتعدد
-LANGUAGES = {
-    'ar': 'العربية',
-    'fr': 'Français',
-    'en': 'English'
-}
-
-# 🔧 إعداد صفحة Streamlit
+# حل خطأ CSS في Streamlit
 st.set_page_config(
-    page_title="PPFO v30.0 - Advanced Mathematics",
+    page_title="PPFO v29.1 - Advanced Mathematics",
     page_icon="🧮",
-    layout="wide",
+    layout="centered",
     initial_sidebar_state="expanded",
     menu_items={
         'Get Help': 'https://docs.streamlit.io',
         'Report a bug': "https://github.com/streamlit/streamlit/issues",
-        'About': "# PPFO v30.0\nAdvanced mathematical application with multilingual support"
+        'About': "# PPFO v29.1\nAdvanced Mathematical Application with Multi-language Support"
     }
 )
 
-# 🎨 CSS مخصص مع دعم كامل للغات والصيغ الرياضية
+# CSS مخصص مع حلول لمشكلة التحميل
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Roboto:wght@300;400;500;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
-    /* دعم كامل متعدد اللغات */
-    .arabic-font {
-        font-family: 'Cairo', sans-serif !important;
-        direction: rtl !important;
-        text-align: right !important;
-    }
-    
-    .latin-font {
-        font-family: 'Roboto', sans-serif !important;
-        direction: ltr !important;
-        text-align: left !important;
-    }
-    
-    /* حل مشكلة CSS */
+    /* حلول لمشكلة CSS */
     body {
+        font-family: 'Inter', 'Cairo', sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
     }
     
-    /* التنسيقات الأساسية */
+    .arabic-text {
+        font-family: 'Cairo', sans-serif;
+        direction: rtl;
+    }
+    
+    .english-text {
+        font-family: 'Inter', sans-serif;
+        direction: ltr;
+    }
+    
+    .french-text {
+        font-family: 'Inter', sans-serif;
+        direction: ltr;
+    }
+    
+    /* تنسيقات أساسية */
     .main-header {
-        font-size: 2.5rem;
+        font-size: 2.3rem;
         color: #4F46E5;
         text-align: center;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.2rem;
         font-weight: 800;
         text-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
     }
     
     .sub-header {
-        font-size: 1.6rem;
+        font-size: 1.4rem;
         color: #7C3AED;
         text-align: center;
         margin-bottom: 2rem;
         opacity: 0.9;
     }
     
-    /* حاويات LaTeX متقدمة */
-    .latex-container {
-        background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
-        border-radius: 16px;
-        padding: 25px;
-        margin: 20px 0;
-        border: 2px solid #bfdbfe;
-        text-align: center;
-        box-shadow: 0 6px 20px rgba(59, 130, 246, 0.2);
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        transition: all 0.3s ease;
-    }
-    
-    .latex-container:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
-    }
-    
-    .latex-title {
-        color: #4F46E5;
-        font-weight: 700;
-        margin-bottom: 12px;
-        font-size: 1.4rem;
-    }
-    
-    .latex-formula {
-        font-size: 1.8rem !important;
-        font-family: 'Cambria Math', 'Times New Roman', serif !important;
-        color: #1e293b;
-        margin: 15px 0;
-        line-height: 1.5;
-        direction: ltr;
-        text-align: center;
-    }
-    
-    .latex-description {
-        color: #475569;
-        font-size: 1.1rem;
-        margin-top: 15px;
-        font-style: italic;
-        line-height: 1.6;
-    }
-    
-    /* بطاقات النتائج */
+    /* مربعات النتائج */
     .result-card {
         background: white;
-        border-radius: 18px;
-        padding: 25px;
-        margin: 20px 0;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.1);
-        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 20px;
+        margin: 15px 0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        border: 1px solid #e5e7eb;
         transition: all 0.3s ease;
     }
     
     .result-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.12);
     }
     
-    /* أزرار متعددة اللغات */
+    /* أزرار مخصصة */
     .stButton>button {
         background: linear-gradient(135deg, #4F46E5, #7C3AED);
         color: white;
         border: none;
-        border-radius: 14px;
-        padding: 16px 30px;
+        border-radius: 12px;
+        padding: 14px 24px;
         font-weight: 600;
-        font-size: 1.2rem;
-        box-shadow: 0 4px 15px rgba(79, 70, 229, 0.4);
+        font-size: 1.1rem;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
         transition: all 0.3s ease;
         width: 100%;
     }
     
-    .multilingual-selectbox {
-        font-size: 1.1rem;
-        padding: 10px;
-        border-radius: 10px;
-        border: 2px solid #4F46E5;
+    /* تنسيقات LaTeX */
+    .latex-container {
+        background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+        border-radius: 12px;
+        padding: 20px;
+        margin: 15px 0;
+        border: 2px solid #bfdbfe;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
     }
     
-    /* تبديل اللغة */
-    .language-selector {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 1000;
-        display: flex;
-        gap: 8px;
+    .latex-formula {
+        font-size: 1.4rem;
+        font-family: 'Cambria Math', 'Times New Roman', serif;
+        color: #1e293b;
+        margin: 8px 0;
+        direction: ltr;
+        text-align: center;
     }
     
-    .lang-btn {
-        background: white;
-        border: 2px solid #4F46E5;
-        border-radius: 20px;
-        padding: 8px 16px;
-        font-weight: 600;
-        color: #4F46E5;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        font-size: 1rem;
+    /* رسائل النظام */
+    .success-box {
+        background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+        border-radius: 12px;
+        padding: 15px;
+        margin: 10px 0;
+        border-left: 4px solid #22c55e;
     }
     
-    .lang-btn:hover {
-        background: #4F46E5;
-        color: white;
+    .warning-box {
+        background: linear-gradient(135deg, #fef3c7, #fde68a);
+        border-radius: 12px;
+        padding: 15px;
+        margin: 10px 0;
+        border-left: 4px solid #f59e0b;
     }
     
-    .lang-btn.active {
-        background: #4F46E5;
-        color: white;
+    .error-box {
+        background: linear-gradient(135deg, #fee2e2, #fecaca);
+        border-radius: 12px;
+        padding: 15px;
+        margin: 10px 0;
+        border-left: 4px solid #ef4444;
     }
     
-    /* دعم الهاتف */
+    /* تنسيقات الهاتف */
     @media (max-width: 768px) {
         .main-header {
-            font-size: 2rem !important;
-        }
-        
-        .sub-header {
-            font-size: 1.3rem !important;
-        }
-        
-        .latex-formula {
-            font-size: 1.4rem !important;
+            font-size: 1.8rem !important;
         }
         
         .stButton>button {
             font-size: 1rem !important;
-            padding: 14px 20px !important;
+            padding: 12px 18px !important;
         }
-        
-        .language-selector {
-            top: 10px;
-            left: 10px;
-        }
-    }
-    
-    /* تصحيحات لـ Streamlit */
-    [data-testid="stSidebar"] {
-        background-color: white;
-        border-right: 2px solid #e2e8f0;
-    }
-    
-    [data-testid="stSidebar"] .sidebar-content {
-        padding: 20px;
     }
 </style>
 
-<!-- JavaScript لتحسين تجربة المستخدم -->
+<!-- حل بديل لخطأ CSS -->
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // إخفاء رسالة خطأ CSS إذا ظهرت
-        const alerts = document.querySelectorAll('.stAlert');
-        alerts.forEach(alert => {
-            if (alert.textContent.includes('Unable to preload CSS')) {
-                alert.style.display = 'none';
+        // إزالة رسالة الخطأ إذا ظهرت
+        const errorElements = document.querySelectorAll('.stAlert');
+        errorElements.forEach(el => {
+            if (el.textContent.includes('Unable to preload CSS')) {
+                el.style.display = 'none';
             }
         });
         
         // تحسين أداء التحميل
         setTimeout(() => {
             document.body.classList.add('loaded');
-        }, 500);
+        }, 300);
     });
 </script>
 """, unsafe_allow_html=True)
 
-# 📚 تحميل المكتبات
+# ===================== نظام الترجمة متعدد اللغات =====================
+
+class TranslationSystem:
+    def __init__(self):
+        self.languages = {
+            'ar': self._arabic_translations(),
+            'en': self._english_translations(),
+            'fr': self._french_translations()
+        }
+    
+    def _arabic_translations(self):
+        return {
+            # التنقل والواجهة
+            'app_title': '🧮 PPFO v29.1',
+            'app_subtitle': 'النسخة المحسّنة - واجهة Streamlit مع دعم متعدد اللغات',
+            'navigation': '🧭 الخدمات المتاحة',
+            'language': 'اللغة',
+            'settings': '⚙️ الإعدادات',
+            'system_info': '🔧 معلومات النظام والإعدادات',
+            'clear_cache': 'مسح الذاكرة المؤقتة',
+            'cache_cleared': '✓ تم مسح الذاكرة المؤقتة',
+            
+            # الخدمات
+            'home': 'الرئيسية',
+            'zeta_zeros': 'أصفار دالة زيتا - مصححة',
+            'prime_factorization': 'التحليل إلى عوامل أولية',
+            'prime_check': 'التحقق من الأعداد الأولية',
+            'mersenne_primes': 'أعداد ميرسين الأولية',
+            'goldbach_conjecture': 'حدسية غولدباخ',
+            'primes_in_range': 'الأعداد الأولية في نطاق',
+            'nth_prime': 'العدد الأولي رقم n',
+            'zeta_function': 'دالة زيتا العامة',
+            'prime_pi': 'دالة العد الأولي (π)',
+            
+            # نصوص عامة
+            'enter_number': 'أدخل الرقم',
+            'calculate': 'حساب',
+            'analyze': 'تحليل',
+            'verify': 'تحقق',
+            'search': 'بحث',
+            'result': 'النتيجة',
+            'time_taken': 'الوقت المستغرق',
+            'seconds': 'ثانية',
+            'digits_count': 'عدد الأرقام',
+            'prime_number': 'عدد أولي',
+            'composite_number': 'عدد غير أولي',
+            'factors': 'العوامل',
+            'unique_factors': 'العوامل المميزة',
+            'largest_factor': 'أكبر عامل',
+            
+            # رسائل نجاح
+            'success': 'نجاح',
+            'prime_success': '🎉 العدد أولي',
+            'factorization_success': 'تم التحليل بنجاح',
+            'calculation_complete': 'اكتمل الحساب',
+            
+            # رسائل خطأ
+            'error': 'خطأ',
+            'invalid_input': 'إدخال غير صالح',
+            'number_too_large': 'الرقم كبير جداً',
+            'timeout': 'انتهى الوقت',
+            
+            # نصوص رياضية
+            'zeta_function': 'دالة زيتا',
+            'zeta_zero_formula': r"\zeta\left(\frac{1}{2} + i t_n\right) = 0",
+            'zeta_zero_description': 'أصفار دالة زيتا غير التافهة على الخط الحرج',
+            'mersenne_formula': r"M_p = 2^p - 1 \quad \text{حيث } p \text{ عدد أولي}",
+            'mersenne_description': 'عدد ميرسين الأولي هو عدد على الصورة 2^p - 1 حيث p عدد أولي',
+            'goldbach_conjecture_text': 'كل عدد زوجي أكبر من 2 يمكن كتابته كمجموع عددين أوليين',
+            
+            # معلومات النظام
+            'system_status': 'حالة النظام',
+            'libraries': 'المكتبات',
+            'available': 'متوفر',
+            'not_available': 'غير متوفر',
+            'notes': 'ملاحظات هامة',
+            'supported_formats': 'التنسيقات المدعومة',
+            
+            # تذييل
+            'footer': '✨ PPFO v29.1 - نسخة Streamlit مع دعم متعدد اللغات',
+            'copyright': '© 2025 - جميع الحقوق محفوظة'
+        }
+    
+    def _english_translations(self):
+        return {
+            # Navigation and Interface
+            'app_title': '🧮 PPFO v29.1',
+            'app_subtitle': 'Enhanced Version - Streamlit Interface with Multi-language Support',
+            'navigation': '🧭 Available Services',
+            'language': 'Language',
+            'settings': '⚙️ Settings',
+            'system_info': '🔧 System Information & Settings',
+            'clear_cache': 'Clear Cache',
+            'cache_cleared': '✓ Cache cleared successfully',
+            
+            # Services
+            'home': 'Home',
+            'zeta_zeros': 'Zeta Zeros - Corrected',
+            'prime_factorization': 'Prime Factorization',
+            'prime_check': 'Prime Number Check',
+            'mersenne_primes': 'Mersenne Primes',
+            'goldbach_conjecture': 'Goldbach Conjecture',
+            'primes_in_range': 'Primes in Range',
+            'nth_prime': 'n-th Prime Number',
+            'zeta_function': 'General Zeta Function',
+            'prime_pi': 'Prime Counting Function (π)',
+            
+            # General Texts
+            'enter_number': 'Enter number',
+            'calculate': 'Calculate',
+            'analyze': 'Analyze',
+            'verify': 'Verify',
+            'search': 'Search',
+            'result': 'Result',
+            'time_taken': 'Time taken',
+            'seconds': 'seconds',
+            'digits_count': 'Number of digits',
+            'prime_number': 'Prime number',
+            'composite_number': 'Composite number',
+            'factors': 'Factors',
+            'unique_factors': 'Unique factors',
+            'largest_factor': 'Largest factor',
+            
+            # Success Messages
+            'success': 'Success',
+            'prime_success': '🎉 Prime number',
+            'factorization_success': 'Factorization successful',
+            'calculation_complete': 'Calculation complete',
+            
+            # Error Messages
+            'error': 'Error',
+            'invalid_input': 'Invalid input',
+            'number_too_large': 'Number too large',
+            'timeout': 'Timeout',
+            
+            # Mathematical Texts
+            'zeta_function': 'Zeta Function',
+            'zeta_zero_formula': r"\zeta\left(\frac{1}{2} + i t_n\right) = 0",
+            'zeta_zero_description': 'Non-trivial zeros of the zeta function on the critical line',
+            'mersenne_formula': r"M_p = 2^p - 1 \quad \text{where } p \text{ is prime}",
+            'mersenne_description': 'A Mersenne prime is a prime number of the form 2^p - 1 where p is prime',
+            'goldbach_conjecture_text': 'Every even integer greater than 2 can be expressed as the sum of two primes',
+            
+            # System Information
+            'system_status': 'System Status',
+            'libraries': 'Libraries',
+            'available': 'Available',
+            'not_available': 'Not available',
+            'notes': 'Important Notes',
+            'supported_formats': 'Supported Formats',
+            
+            # Footer
+            'footer': '✨ PPFO v29.1 - Streamlit Version with Multi-language Support',
+            'copyright': '© 2025 - All rights reserved'
+        }
+    
+    def _french_translations(self):
+        return {
+            # Navigation et Interface
+            'app_title': '🧮 PPFO v29.1',
+            'app_subtitle': 'Version Améliorée - Interface Streamlit avec Support Multilingue',
+            'navigation': '🧭 Services Disponibles',
+            'language': 'Langue',
+            'settings': '⚙️ Paramètres',
+            'system_info': '🔧 Informations Système & Paramètres',
+            'clear_cache': 'Effacer le Cache',
+            'cache_cleared': '✓ Cache effacé avec succès',
+            
+            # Services
+            'home': 'Accueil',
+            'zeta_zeros': 'Zéros de Zeta - Corrigés',
+            'prime_factorization': 'Factorisation en Nombres Premiers',
+            'prime_check': 'Vérification de Nombre Premier',
+            'mersenne_primes': 'Nombres Premiers de Mersenne',
+            'goldbach_conjecture': 'Conjecture de Goldbach',
+            'primes_in_range': 'Nombres Premiers dans un Intervalle',
+            'nth_prime': 'n-ième Nombre Premier',
+            'zeta_function': 'Fonction Zêta Générale',
+            'prime_pi': 'Fonction de Compte des Premiers (π)',
+            
+            # Textes Généraux
+            'enter_number': 'Entrez le nombre',
+            'calculate': 'Calculer',
+            'analyze': 'Analyser',
+            'verify': 'Vérifier',
+            'search': 'Rechercher',
+            'result': 'Résultat',
+            'time_taken': 'Temps écoulé',
+            'seconds': 'secondes',
+            'digits_count': 'Nombre de chiffres',
+            'prime_number': 'Nombre premier',
+            'composite_number': 'Nombre composé',
+            'factors': 'Facteurs',
+            'unique_factors': 'Facteurs uniques',
+            'largest_factor': 'Plus grand facteur',
+            
+            # Messages de Succès
+            'success': 'Succès',
+            'prime_success': '🎉 Nombre premier',
+            'factorization_success': 'Factorisation réussie',
+            'calculation_complete': 'Calcul terminé',
+            
+            # Messages d\'Erreur
+            'error': 'Erreur',
+            'invalid_input': 'Entrée invalide',
+            'number_too_large': 'Nombre trop grand',
+            'timeout': 'Temps écoulé',
+            
+            # Textes Mathématiques
+            'zeta_function': 'Fonction Zêta',
+            'zeta_zero_formula': r"\zeta\left(\frac{1}{2} + i t_n\right) = 0",
+            'zeta_zero_description': 'Zéros non triviaux de la fonction zêta sur la ligne critique',
+            'mersenne_formula': r"M_p = 2^p - 1 \quad \text{où } p \text{ est premier}",
+            'mersenne_description': 'Un nombre premier de Mersenne est un nombre premier de la forme 2^p - 1 où p est premier',
+            'goldbach_conjecture_text': 'Tout entier pair supérieur à 2 peut être exprimé comme la somme de deux nombres premiers',
+            
+            # Informations Système
+            'system_status': 'État du Système',
+            'libraries': 'Bibliothèques',
+            'available': 'Disponible',
+            'not_available': 'Non disponible',
+            'notes': 'Notes Importantes',
+            'supported_formats': 'Formats Supportés',
+            
+            # Pied de Page
+            'footer': '✨ PPFO v29.1 - Version Streamlit avec Support Multilingue',
+            'copyright': '© 2025 - Tous droits réservés'
+        }
+    
+    def get_text(self, key, lang='ar'):
+        """الحصول على النص المترجم حسب اللغة"""
+        return self.languages.get(lang, {}).get(key, key)
+    
+    def get_language_class(self, lang):
+        """الحصول على class CSS المناسب للغة"""
+        classes = {
+            'ar': 'arabic-text',
+            'en': 'english-text',
+            'fr': 'french-text'
+        }
+        return classes.get(lang, 'arabic-text')
+
+# تهيئة نظام الترجمة
+translator = TranslationSystem()
+
+# محاولة استيراد المكتبات
 try:
     import sympy
     SYMPY_AVAILABLE = True
@@ -261,14 +445,15 @@ except Exception:
 try:
     import mpmath as mp
     MP_MATH_AVAILABLE = True
-    mp.mp.dps = 60  # دقة عالية
+    mp.mp.dps = 50
 except Exception:
     MP_MATH_AVAILABLE = False
 
-# 📐 ثوابت رياضية
+# ثوابت رياضية
 EULER_GAMMA = 0.57721566490153286060651209008240243104215933593992
+PI = math.pi
 
-# 📊 قائمة أصفار زيتا (تقريبية)
+# قائمة أصفار زيتا (تقريبية)
 RIEMANN_ZEROS = [
     14.1347251417347, 21.0220396387716, 25.0108575801457, 30.4248761258595,
     32.9350615877392, 37.5861781588257, 40.9187190121475, 43.327073280915,
@@ -297,173 +482,12 @@ RIEMANN_ZEROS = [
     231.250188700499, 231.987235253181, 233.693404178908, 236.524229665813
 ]
 
-# 🌍 نظام الترجمة
-TRANSLATIONS = {
-    'ar': {
-        'app_title': "PPFO v30.0 - الرياضيات المتقدمة",
-        'welcome': "مرحباً بك في تطبيق الرياضيات المتقدمة PPFO",
-        'zeta_zeros': "𝛇 أصفار دالة زيتا غير التافهة",
-        'prime_factorization': "🔍 التحليل إلى عوامل أولية",
-        'prime_verification': "✅ التحقق من الأعداد الأولية",
-        'mersenne_primes': "🎯 أعداد ميرسين الأولية",
-        'goldbach_conjecture': "🧮 حدسية غولدباخ",
-        'prime_range': "📈 الأعداد الأولية في نطاق",
-        'taylor_series': "📊 متسلسلة تايلور",
-        'advanced_functions': "🧩 الدوال المتقدمة",
-        'home': "🏠 الصفحة الرئيسية",
-        'calculate': "🎯 حساب",
-        'result': "النتيجة",
-        'error': "خطأ",
-        'success': "نجاح",
-        'warning': "تحذير",
-        'info': "معلومات",
-        'quick_examples': "⚡ أمثلة سريعة",
-        'system_info': "🔧 معلومات النظام",
-        'number': "العدد",
-        'prime_status': "حالة العدد الأولي",
-        'is_prime': "العدد أولي ✓",
-        'not_prime': "العدد غير أولي ✗",
-        'factors': "العوامل",
-        'zeta_zero': "الصفر لزيتا",
-        'time_taken': "الوقت المستغرق",
-        'language_selector': "اختر اللغة",
-        'language': "اللغة",
-        'zeta_formula': r"\zeta\left(\frac{1}{2} + i t_n\right) = 0",
-        'zeta_description': "أصفار دالة زيتا غير التافهة على الخط الحرج",
-        'mersenne_formula': r"M_p = 2^p - 1 \quad \text{حيث } p \text{ عدد أولي}",
-        'mersenne_description': "عدد ميرسين الأولي هو عدد على الصورة 2^p - 1 حيث p عدد أولي",
-        'settings': "⚙️ الإعدادات",
-        'clear_cache': "مسح الذاكرة المؤقتة",
-        'cache_cleared': "✓ تم مسح الذاكرة المؤقتة",
-        'format_support': "التنسيقات المدعومة",
-        'large_number_formats': "التنسيقات المدعومة للأعداد الكبيرة"
-    },
-    'fr': {
-        'app_title': "PPFO v30.0 - Mathématiques avancées",
-        'welcome': "Bienvenue dans l'application mathématique avancée PPFO",
-        'zeta_zeros': "𝛇 Zéros non triviaux de la fonction Zêta",
-        'prime_factorization': "🔍 Factorisation en nombres premiers",
-        'prime_verification': "✅ Vérification des nombres premiers",
-        'mersenne_primes': "🎯 Nombres premiers de Mersenne",
-        'goldbach_conjecture': "🧮 Conjecture de Goldbach",
-        'prime_range': "📈 Nombres premiers dans une plage",
-        'taylor_series': "📊 Série de Taylor",
-        'advanced_functions': "🧩 Fonctions avancées",
-        'home': "🏠 Page d'accueil",
-        'calculate': "🎯 Calculer",
-        'result': "Résultat",
-        'error': "Erreur",
-        'success': "Succès",
-        'warning': "Avertissement",
-        'info': "Informations",
-        'quick_examples': "⚡ Exemples rapides",
-        'system_info': "🔧 Informations système",
-        'number': "Nombre",
-        'prime_status': "Statut du nombre premier",
-        'is_prime': "Nombre premier ✓",
-        'not_prime': "Nombre non premier ✗",
-        'factors': "Facteurs",
-        'zeta_zero': "Zéro de Zêta",
-        'time_taken': "Temps écoulé",
-        'language_selector': "Choisir la langue",
-        'language': "Langue",
-        'zeta_formula': r"\zeta\left(\frac{1}{2} + i t_n\right) = 0",
-        'zeta_description': "Zéros non triviaux de la fonction Zêta sur la ligne critique",
-        'mersenne_formula': r"M_p = 2^p - 1 \quad \text{où } p \text{ est premier}",
-        'mersenne_description': "Un nombre premier de Mersenne est un nombre de la forme 2^p - 1 où p est premier",
-        'settings': "⚙️ Paramètres",
-        'clear_cache': "Effacer le cache",
-        'cache_cleared': "✓ Cache effacé",
-        'format_support': "Formats supportés",
-        'large_number_formats': "Formats supportés pour les grands nombres"
-    },
-    'en': {
-        'app_title': "PPFO v30.0 - Advanced Mathematics",
-        'welcome': "Welcome to the advanced mathematics application PPFO",
-        'zeta_zeros': "𝛇 Non-trivial zeros of the Zeta function",
-        'prime_factorization': "🔍 Prime factorization",
-        'prime_verification': "✅ Prime verification",
-        'mersenne_primes': "🎯 Mersenne prime numbers",
-        'goldbach_conjecture': "🧮 Goldbach conjecture",
-        'prime_range': "📈 Prime numbers in range",
-        'taylor_series': "📊 Taylor series",
-        'advanced_functions': "🧩 Advanced functions",
-        'home': "🏠 Home page",
-        'calculate': "🎯 Calculate",
-        'result': "Result",
-        'error': "Error",
-        'success': "Success",
-        'warning': "Warning",
-        'info': "Info",
-        'quick_examples': "⚡ Quick examples",
-        'system_info': "🔧 System information",
-        'number': "Number",
-        'prime_status': "Prime status",
-        'is_prime': "Prime number ✓",
-        'not_prime': "Not prime ✗",
-        'factors': "Factors",
-        'zeta_zero': "Zeta zero",
-        'time_taken': "Time taken",
-        'language_selector': "Select language",
-        'language': "Language",
-        'zeta_formula': r"\zeta\left(\frac{1}{2} + i t_n\right) = 0",
-        'zeta_description': "Non-trivial zeros of the Zeta function on the critical line",
-        'mersenne_formula': r"M_p = 2^p - 1 \quad \text{where } p \text{ is prime}",
-        'mersenne_description': "A Mersenne prime is a number of the form 2^p - 1 where p is prime",
-        'settings': "⚙️ Settings",
-        'clear_cache': "Clear cache",
-        'cache_cleared': "✓ Cache cleared",
-        'format_support': "Supported formats",
-        'large_number_formats': "Supported formats for large numbers"
-    }
-}
-
-# ===================== الوظائف الأساسية =====================
-
-@st.cache_data
-def get_translation(key, lang):
-    """الحصول على الترجمة المناسبة للمفتاح واللغة"""
-    return TRANSLATIONS.get(lang, {}).get(key, key)
-
-def show_latex_formula(formula, title_key, description_key, lang, bg_color="linear-gradient(135deg, #f0f9ff, #e0f2fe)"):
-    """عرض صيغة رياضية باستخدام LaTeX مع تنسيق جميل ودعم متعدد اللغات"""
-    title = get_translation(title_key, lang)
-    description = get_translation(description_key, lang)
-    
-    direction_class = "arabic-font" if lang == 'ar' else "latin-font"
-    
-    st.markdown(f"""
-    <div class="latex-container {direction_class}" style="background: {bg_color};">
-        <div class="latex-title">{title}</div>
-        <div class="latex-formula">{formula}</div>
-        <div class="latex-description">{description}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-def show_result_card(title, content, status="info", lang='ar'):
-    """عرض بطاقة نتائج بألوان مختلفة"""
-    colors = {
-        'info': '#3B82F6',
-        'success': '#10B981',
-        'warning': '#F59E0B',
-        'danger': '#EF4444',
-        'primary': '#4F46E5'
-    }
-    
-    direction_class = "arabic-font" if lang == 'ar' else "latin-font"
-    
-    st.markdown(f"""
-    <div class="result-card {direction_class}" style="border-top: 5px solid {colors.get(status, '#3B82F6')};">
-        <strong>{title}:</strong> {content}
-    </div>
-    """, unsafe_allow_html=True)
+# ===================== دوال الدعم الأساسية =====================
 
 def parse_large_number(input_str):
     """تحويل النص إلى عدد كبير مع دعم التنسيقات المختلفة"""
     if not input_str or not input_str.strip():
-        raise ValueError("الرجاء إدخال عدد" if st.session_state.lang == 'ar' else
-                         "Veuillez entrer un nombre" if st.session_state.lang == 'fr' else
-                         "Please enter a number")
+        raise ValueError("الرجاء إدخال عدد")
     
     input_str = str(input_str).strip().replace(',', '').replace(' ', '').replace('−', '-')
     
@@ -489,9 +513,7 @@ def parse_large_number(input_str):
     try:
         return int(input_str)
     except ValueError:
-        raise ValueError(f"لا يمكن تحويل '{input_str}' إلى عدد صحيح" if st.session_state.lang == 'ar' else
-                         f"Impossible de convertir '{input_str}' en nombre entier" if st.session_state.lang == 'fr' else
-                         f"Cannot convert '{input_str}' to integer")
+        raise ValueError(f"لا يمكن تحويل '{input_str}' إلى عدد صحيح")
 
 def format_large_number(n):
     """تنسيق الأعداد الكبيرة لعرضها بشكل مقروء"""
@@ -520,9 +542,8 @@ def format_large_number(n):
         n_str = n_str[:-3]
     return sign + ','.join(reversed(parts))
 
-# ===================== جميع الخوارزميات الرياضية كما هي بدون تعديل =====================
+# ===================== دوال زيتا محسّنة =====================
 
-# دوال زيتا
 def riemann_siegel_theta(t):
     """حساب دالة ثيتا لريمان-سيغل بدقة أعلى"""
     if t <= 0:
@@ -558,9 +579,7 @@ def cached_zeta_zero(n, method="accurate"):
         return RIEMANN_ZEROS[n-1]
     
     if n < 1:
-        raise ValueError("n يجب أن يكون موجباً" if st.session_state.lang == 'ar' else
-                         "n doit être positif" if st.session_state.lang == 'fr' else
-                         "n must be positive")
+        raise ValueError("n يجب أن يكون موجباً")
     
     known_zeros = {
         1: 14.134725141734693790, 2: 21.022039638771554993, 3: 25.010857580145688763,
@@ -612,9 +631,7 @@ def zeta_zero_advanced(n, method="auto", precise=True):
     n = int(n)
     
     if n < 1:
-        raise ValueError("n يجب أن يكون على الأقل 1" if st.session_state.lang == 'ar' else
-                         "n doit être au moins 1" if st.session_state.lang == 'fr' else
-                         "n must be at least 1")
+        raise ValueError("n يجب أن يكون على الأقل 1")
     
     if method == "auto":
         if n <= 50:
@@ -625,7 +642,24 @@ def zeta_zero_advanced(n, method="auto", precise=True):
     result = cached_zeta_zero(n, method)
     return result if precise else round(result, 4)
 
-# دوال الأعداد الأولية
+def zeta_function(s, precision=50):
+    """حساب دالة زيتا للعدد s"""
+    if MP_MATH_AVAILABLE:
+        mp.mp.dps = precision
+        return complex(mp.zeta(s))
+    else:
+        # تقريب باستخدام متسلسلة إذا لم تكن mpmath متوفرة
+        if s == 1:
+            return float('inf')
+        # استخدام متسلسلة ديريشليت
+        result = 0
+        for n in range(1, 10000):
+            term = 1 / (n ** s)
+            result += term
+        return result
+
+# ===================== دوال الأعداد الأولية المحسّنة =====================
+
 @lru_cache(maxsize=10000)
 def is_prime_fast(n: int) -> bool:
     """نسخة محسنة وسريعة من التحقق من الأعداد الأولية مع دعم الأعداد الكبيرة"""
@@ -794,12 +828,10 @@ def factorize_fast(n: int, timeout=30):
     
     return sorted(factors)
 
-# خدمات جديدة متقدمة
+# ===================== خدمات جديدة متقدمة =====================
+
 def mersenne_primes_between(n1, n2):
-    """
-    إرجاع قائمة أعداد ميرسين الأولية بين n1 و n2
-    عدد ميرسين: 2^p - 1 حيث p عدد أولي
-    """
+    """إرجاع قائمة أعداد ميرسين الأولية بين n1 و n2"""
     results = []
     p = 2
     while True:
@@ -815,15 +847,31 @@ def mersenne_primes_between(n1, n2):
 
 def next_prime(n):
     """إيجاد العدد الأولي التالي لـ n"""
-    n += 1
+    if n < 2:
+        return 2
+    n = n + 1 if n % 2 == 0 else n + 2
     while not is_prime_fast(n):
-        n += 1
+        n += 2
     return n
 
+def nth_prime(n):
+    """إرجاع العدد الأولي رقم n"""
+    if n < 1:
+        raise ValueError("n يجب أن يكون على الأقل 1")
+    if n == 1:
+        return 2
+    count = 1
+    num = 3
+    while count < n:
+        if is_prime_fast(num):
+            count += 1
+            if count == n:
+                return num
+        num += 2
+    return num
+
 def goldbach_pairs_between(n1, n2):
-    """
-    إرجاع جميع أزواج غولدباخ للأعداد الزوجية بين n1 و n2
-    """
+    """إرجاع جميع أزواج غولدباخ للأعداد الزوجية بين n1 و n2"""
     results = []
     for n in range(n1, n2 + 1):
         if n % 2 == 0 and n >= 4:
@@ -836,7 +884,10 @@ def goldbach_verification(n, limit=10000):
     """التحقق من حدسية غولدباخ"""
     if n % 2 != 0 or n < 4:
         return False, []
-    for i in range(2, min(n, limit)):
+    # نبحث عن زوج أولي
+    for i in range(2, n//2 + 1):
+        if i > limit:
+            break
         if is_prime_fast(i) and is_prime_fast(n - i):
             return True, [i, n - i]
     return False, []
@@ -844,238 +895,254 @@ def goldbach_verification(n, limit=10000):
 def primes_between(n1, n2):
     """إرجاع جميع الأعداد الأولية بين n1 و n2"""
     primes = []
-    for num in range(max(2, n1), n2 + 1):
+    # نبدأ من العدد الفردي الأول بعد n1
+    start = max(2, n1)
+    if start <= 2:
+        primes.append(2)
+        start = 3
+    elif start % 2 == 0:
+        start += 1
+    
+    for num in range(start, n2 + 1, 2):
         if is_prime_fast(num):
             primes.append(num)
     return primes
 
-# ===================== واجهة المستخدم الرئيسية =====================
+def prime_pi(x):
+    """دالة العد الأولي: عدد الأعداد الأولية ≤ x"""
+    if x < 2:
+        return 0
+    count = 1  # العدد 2
+    for num in range(3, int(x) + 1, 2):
+        if is_prime_fast(num):
+            count += 1
+    return count
 
-def main():
-    # تهيئة حالة الجلسة
-    if 'lang' not in st.session_state:
-        st.session_state.lang = 'ar'
-    
-    # زر تبديل اللغة في الزاوية
+def calculate_pi(precision=10000):
+    """حساب π بدقة عالية باستخدام صيغة ماشين"""
+    if MP_MATH_AVAILABLE:
+        mp.mp.dps = precision // 100 + 50  # زيادة الدقة
+        return str(mp.pi)
+    else:
+        # استخدام صيغة ماشين التقريبية
+        pi_val = 4 * (4 * math.atan(1/5) - math.atan(1/239))
+        return f"{pi_val:.{min(precision, 15)}f}"
+
+# ===================== واجهة Streamlit المحسنة مع دعم متعدد اللغات =====================
+
+def show_latex_formula(formula, title="", description="", bg_color="linear-gradient(135deg, #f0f9ff, #e0f2fe)"):
+    """عرض صيغة رياضية باستخدام LaTeX مع تنسيق جميل"""
     st.markdown(f"""
-    <div class="language-selector">
-        <button class="lang-btn {'active' if st.session_state.lang == 'ar' else ''}" 
-                onclick="window.parent.document.querySelector('.stButton button:nth-child(1)').click()">🇸🇦</button>
-        <button class="lang-btn {'active' if st.session_state.lang == 'fr' else ''}"
-                onclick="window.parent.document.querySelector('.stButton button:nth-child(2)').click()">🇫🇷</button>
-        <button class="lang-btn {'active' if st.session_state.lang == 'en' else ''}"
-                onclick="window.parent.document.querySelector('.stButton button:nth-child(3)').click()">🇬🇧</button>
+    <div class="latex-container" style="background: {bg_color};">
+        <strong>{title}</strong>
+        <div class="latex-formula">{formula}</div>
+        <div style="color: #475569; font-size: 0.95rem; margin-top: 8px; font-style: italic;">{description}</div>
     </div>
     """, unsafe_allow_html=True)
+
+def main():
+    # إعدادات اللغة
+    if 'language' not in st.session_state:
+        st.session_state.language = 'ar'
     
-    # أزرار تبديل اللغة الخفية
-    col_lang = st.columns(3)
-    with col_lang[0]:
-        if st.button('ar', key='lang_ar', help='Arabic'):
-            st.session_state.lang = 'ar'
-            st.rerun()
-    with col_lang[1]:
-        if st.button('fr', key='lang_fr', help='French'):
-            st.session_state.lang = 'fr'
-            st.rerun()
-    with col_lang[2]:
-        if st.button('en', key='lang_en', help='English'):
-            st.session_state.lang = 'en'
-            st.rerun()
+    # الشريط الجانبي للغة والإعدادات
+    with st.sidebar:
+        st.title(translator.get_text('navigation', st.session_state.language))
+        
+        # اختيار اللغة
+        lang_option = st.selectbox(
+            translator.get_text('language', st.session_state.language),
+            ['العربية', 'English', 'Français'],
+            index=['العربية', 'English', 'Français'].index(
+                {'ar': 'العربية', 'en': 'English', 'fr': 'Français'}[st.session_state.language]
+            ),
+            key='lang_selector'
+        )
+        
+        # تحديث اللغة في session state
+        lang_map = {'العربية': 'ar', 'English': 'en', 'Français': 'fr'}
+        st.session_state.language = lang_map[lang_option]
+        
+        # الخدمات المتاحة
+        service = st.selectbox(
+            "",
+            [
+                translator.get_text('home', st.session_state.language),
+                translator.get_text('zeta_zeros', st.session_state.language),
+                translator.get_text('prime_factorization', st.session_state.language),
+                translator.get_text('prime_check', st.session_state.language),
+                translator.get_text('mersenne_primes', st.session_state.language),
+                translator.get_text('goldbach_conjecture', st.session_state.language),
+                translator.get_text('primes_in_range', st.session_state.language),
+                translator.get_text('nth_prime', st.session_state.language),
+                translator.get_text('zeta_function', st.session_state.language),
+                translator.get_text('prime_pi', st.session_state.language),
+                "حساب π بدقة عالية"
+            ]
+        )
     
-    # الترويسة حسب اللغة
-    direction_class = "arabic-font" if st.session_state.lang == 'ar' else "latin-font"
-    
-    st.markdown(f'<h1 class="main-header {direction_class}">🧮 {get_translation("app_title", st.session_state.lang)}</h1>', unsafe_allow_html=True)
-    st.markdown(f'<h2 class="sub-header {direction_class}">{get_translation("welcome", st.session_state.lang)}</h2>', unsafe_allow_html=True)
-    
-    # الشريط الجانبي للتنقل
-    st.sidebar.header(get_translation("language_selector", st.session_state.lang))
-    lang = st.sidebar.selectbox(
-        get_translation("language", st.session_state.lang),
-        options=list(LANGUAGES.keys()),
-        format_func=lambda x: LANGUAGES[x],
-        key='sidebar_lang'
-    )
-    
-    if lang != st.session_state.lang:
-        st.session_state.lang = lang
-        st.rerun()
-    
-    # قائمة الخدمات
-    services = [
-        get_translation("home", st.session_state.lang),
-        get_translation("zeta_zeros", st.session_state.lang),
-        get_translation("prime_factorization", st.session_state.lang),
-        get_translation("prime_verification", st.session_state.lang),
-        get_translation("mersenne_primes", st.session_state.lang),
-        get_translation("goldbach_conjecture", st.session_state.lang),
-        get_translation("prime_range", st.session_state.lang),
-        get_translation("taylor_series", st.session_state.lang),
-        get_translation("advanced_functions", st.session_state.lang)
-    ]
-    
-    service = st.sidebar.selectbox(
-        get_translation("services", st.session_state.lang) if hasattr(st.session_state, 'lang') else "الخدمات",
-        services,
-        key='service_selector'
-    )
+    # الترويسة مع class اللغة المناسب
+    lang_class = translator.get_language_class(st.session_state.language)
+    st.markdown(f'<h1 class="main-header {lang_class}">🧮 PPFO v29.1</h1>', unsafe_allow_html=True)
+    st.markdown(f'<h2 class="sub-header {lang_class}">{translator.get_text("app_subtitle", st.session_state.language)}</h2>', unsafe_allow_html=True)
     
     # معلومات النظام
-    with st.expander(get_translation("system_info", st.session_state.lang), expanded=False):
+    with st.expander(f"🔧 {translator.get_text('system_info', st.session_state.language)}", expanded=False):
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.info(f"**Sympy:** {'✅ متوفر' if SYMPY_AVAILABLE else '❌ غير متوفر'}" if st.session_state.lang == 'ar' else
-                   f"**Sympy:** {'✅ Disponible' if SYMPY_AVAILABLE else '❌ Non disponible'}" if st.session_state.lang == 'fr' else
-                   f"**Sympy:** {'✅ Available' if SYMPY_AVAILABLE else '❌ Not available'}")
+            status_text = f"**Sympy:** {'✅ ' + translator.get_text('available', st.session_state.language) if SYMPY_AVAILABLE else '❌ ' + translator.get_text('not_available', st.session_state.language)}"
+            st.info(status_text)
         with col2:
-            st.info(f"**GMPY2:** {'✅ متوفر' if GMPY2_AVAILABLE else '❌ غير متوفر'}" if st.session_state.lang == 'ar' else
-                   f"**GMPY2:** {'✅ Disponible' if GMPY2_AVAILABLE else '❌ Non disponible'}" if st.session_state.lang == 'fr' else
-                   f"**GMPY2:** {'✅ Available' if GMPY2_AVAILABLE else '❌ Not available'}")
+            status_text = f"**GMPY2:** {'✅ ' + translator.get_text('available', st.session_state.language) if GMPY2_AVAILABLE else '❌ ' + translator.get_text('not_available', st.session_state.language)}"
+            st.info(status_text)
         with col3:
-            st.info(f"**mpmath:** {'✅ متوفر' if MP_MATH_AVAILABLE else '❌ غير متوفر'}" if st.session_state.lang == 'ar' else
-                   f"**mpmath:** {'✅ Disponible' if MP_MATH_AVAILABLE else '❌ Non disponible'}" if st.session_state.lang == 'fr' else
-                   f"**mpmath:** {'✅ Available' if MP_MATH_AVAILABLE else '❌ Not available'}")
+            status_text = f"**mpmath:** {'✅ ' + translator.get_text('available', st.session_state.language) if MP_MATH_AVAILABLE else '❌ ' + translator.get_text('not_available', st.session_state.language)}"
+            st.info(status_text)
         
-        st.success(get_translation("cache_cleared", st.session_state.lang) if hasattr(st.session_state, 'cache_cleared') and st.session_state.cache_cleared else "")
-        
-        with st.expander(get_translation("format_support", st.session_state.lang)):
-            st.info("""
-            **التنسيقات المدعومة:**
-            - `123456789`
-            - `123,456,789` 
-            - `1.23456789e8`
-            - `2^50` أو `2**50`
-            """ if st.session_state.lang == 'ar' else """
-            **Formats supportés:**
-            - `123456789`
-            - `123,456,789` 
-            - `1.23456789e8`
-            - `2^50` ou `2**50`
-            """ if st.session_state.lang == 'fr' else """
-            **Supported formats:**
-            - `123456789`
-            - `123,456,789` 
-            - `1.23456789e8`
-            - `2^50` or `2**50`
-            """)
+        st.success("**✅ " + translator.get_text('system_status', st.session_state.language) + "**")
+        st.warning(f"""
+        **{translator.get_text('notes', st.session_state.language)}:**
+        - {translator.get_text('supported_formats', st.session_state.language)}: `123,456,789` أو `1.23e8` أو `2^100`
+        - الحد الأقصى للتحليل: 100,000 رقم
+        - استخدم الترميز العلمي للأعداد الكبيرة جداً
+        """)
     
     # الصفحة الرئيسية
-    if service == get_translation("home", st.session_state.lang):
-        st.header(f"🏠 {get_translation('home', st.session_state.lang)}")
+    if service == translator.get_text('home', st.session_state.language):
+        st.header("🏠 " + translator.get_text('home', st.session_state.language))
         
-        # شرح الرياضيات باستخدام LaTeX
-        show_latex_formula(
-            get_translation('zeta_formula', st.session_state.lang),
-            "zeta_zeros",
-            "zeta_description",
-            st.session_state.lang
-        )
+        st.markdown(f"""
+        <div class="result-card {lang_class}">
+            <h3>✨ PPFO v29.1 - {translator.get_text('app_subtitle', st.session_state.language)}</h3>
+            <p>{'تم دمج جميع الميزات الرياضية المتقدمة مع دعم متعدد اللغات.' if st.session_state.language == 'ar' else 'All advanced mathematical features integrated with multi-language support.' if st.session_state.language == 'en' else 'Toutes les fonctionnalités mathématiques avancées intégrées avec support multilingue.'}</p>
+            
+            <h4>✅ {'الميزات الجديدة:' if st.session_state.language == 'ar' else 'New Features:' if st.session_state.language == 'en' else 'Nouvelles Fonctionnalités:'}</h4>
+            <ul>
+                <li>{'واجهة Streamlit تفاعلية مع جميع خدمات PPFO' if st.session_state.language == 'ar' else 'Interactive Streamlit interface with all PPFO services' if st.session_state.language == 'en' else 'Interface Streamlit interactive avec tous les services PPFO'}</li>
+                <li>{'دعم كامل للغات العربية والإنجليزية والفرنسية' if st.session_state.language == 'ar' else 'Full support for Arabic, English and French languages' if st.session_state.language == 'en' else 'Support complet pour les langues Arabe, Anglais et Français'}</li>
+                <li>{'تنسيق رياضي أنيق باستخدام LaTeX' if st.session_state.language == 'ar' else 'Elegant mathematical formatting using LaTeX' if st.session_state.language == 'en' else 'Formatage mathématique élégant utilisant LaTeX'}</li>
+                <li>{'دعم كامل للأعداد الكبيرة' if st.session_state.language == 'ar' else 'Full support for large numbers' if st.session_state.language == 'en' else 'Support complet pour les grands nombres'}</li>
+            </ul>
+            
+            <h4>🚀 {'الخدمات الرئيسية:' if st.session_state.language == 'ar' else 'Main Services:' if st.session_state.language == 'en' else 'Services Principaux:'}</h4>
+            <ul>
+                <li>𝛇 {translator.get_text('zeta_zeros', st.session_state.language)}</li>
+                <li>🔍 {translator.get_text('prime_factorization', st.session_state.language)}</li>
+                <li>🎯 {translator.get_text('mersenne_primes', st.session_state.language)}</li>
+                <li>🧮 {translator.get_text('goldbach_conjecture', st.session_state.language)}</li>
+                <li>🔢 {translator.get_text('nth_prime', st.session_state.language)}</li>
+                <li>𝛇 {translator.get_text('zeta_function', st.session_state.language)}</li>
+                <li>π {translator.get_text('prime_pi', st.session_state.language)}</li>
+                <li>π حساب π بدقة عالية</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
         
-        show_result_card(
-            get_translation("welcome", st.session_state.lang),
-            f"PPFO v30.0 - {get_translation('app_title', st.session_state.lang)}",
-            "primary",
-            st.session_state.lang
-        )
-        
-        st.subheader(get_translation("quick_examples", st.session_state.lang))
+        # أمثلة سريعة
+        st.subheader("⚡ " + ('أمثلة سريعة' if st.session_state.language == 'ar' else 'Quick Examples' if st.session_state.language == 'en' else 'Exemples Rapides'))
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            if st.button(f"🎯 {get_translation('zeta_zero', st.session_state.lang)} 167"):
-                with st.spinner(get_translation("calculating", st.session_state.lang) if hasattr(st.session_state, 'lang') else "Calculating..."):
+            if st.button("🎯 " + ('حساب الصفر 167 لزيتا' if st.session_state.language == 'ar' else 'Calculate Zeta Zero 167' if st.session_state.language == 'en' else 'Calculer Zéro Zeta 167')):
+                with st.spinner('جاري الحساب...' if st.session_state.language == 'ar' else 'Calculating...' if st.session_state.language == 'en' else 'Calcul en cours...'):
                     zero_167 = zeta_zero_advanced(167)
-                    st.success(f"{get_translation('zeta_zero', st.session_state.lang)} 167 = {zero_167:.12f}")
-                    st.info("القيمة الصحيحة: 346.3478705660099473959364598161519" if st.session_state.lang == 'ar' else
-                           "Valeur exacte: 346.3478705660099473959364598161519" if st.session_state.lang == 'fr' else
-                           "Exact value: 346.3478705660099473959364598161519")
+                    st.success(f"{'الصفر 167 = ' if st.session_state.language == 'ar' else 'Zero 167 = ' if st.session_state.language == 'en' else 'Zéro 167 = '}{zero_167:.12f}")
         
         with col2:
-            if st.button(f"🧮 {get_translation('factorization', st.session_state.lang)} 123456789"):
-                with st.spinner(get_translation("calculating", st.session_state.lang) if hasattr(st.session_state, 'lang') else "Calculating..."):
+            if st.button("🧮 " + ('تحليل 123456789' if st.session_state.language == 'ar' else 'Factorize 123456789' if st.session_state.language == 'en' else 'Factoriser 123456789')):
+                with st.spinner('جاري التحليل...' if st.session_state.language == 'ar' else 'Analyzing...' if st.session_state.language == 'en' else 'Analyse en cours...'):
                     factors = factorize_fast(123456789)
-                    st.success(f"{get_translation('factors', st.session_state.lang)}: {factors}")
+                    st.success(f"{'العوامل: ' if st.session_state.language == 'ar' else 'Factors: ' if st.session_state.language == 'en' else 'Facteurs: '}{factors}")
         
         with col3:
-            if st.button(f"🔢 {get_translation('prime_number', st.session_state.lang)} #1000"):
-                with st.spinner(get_translation("calculating", st.session_state.lang) if hasattr(st.session_state, 'lang') else "Calculating..."):
-                    count = 0
-                    num = 2
-                    while count < 1000:
-                        if is_prime_fast(num):
-                            count += 1
-                            if count == 1000:
-                                st.success(f"{get_translation('prime_number', st.session_state.lang)} #1000: {num}")
-                        num += 1
+            if st.button("🔢 " + ('العدد الأولي رقم 1000' if st.session_state.language == 'ar' else '1000th Prime Number' if st.session_state.language == 'en' else '1000ème Nombre Premier')):
+                with st.spinner('جاري الحساب...' if st.session_state.language == 'ar' else 'Calculating...' if st.session_state.language == 'en' else 'Calcul en cours...'):
+                    prime_1000 = nth_prime(1000)
+                    st.success(f"{'العدد الأولي رقم 1000: ' if st.session_state.language == 'ar' else '1000th prime number: ' if st.session_state.language == 'en' else '1000ème nombre premier: '}{prime_1000}")
     
-    # أصفار دالة زيتا
-    elif service == get_translation("zeta_zeros", st.session_state.lang):
-        st.header(f"𝛇 {get_translation('zeta_zeros', st.session_state.lang)}")
+    # قسم أصفار دالة زيتا المصححة
+    elif service == translator.get_text('zeta_zeros', st.session_state.language):
+        st.header("𝛇 " + translator.get_text('zeta_zeros', st.session_state.language))
         
-        # صيغة رياضية جميلة
         show_latex_formula(
-            get_translation('zeta_formula', st.session_state.lang),
-            "zeta_zeros",
-            "zeta_description",
-            st.session_state.lang
+            translator.get_text('zeta_zero_formula', st.session_state.language),
+            translator.get_text('zeta_function', st.session_state.language),
+            translator.get_text('zeta_zero_description', st.session_state.language)
         )
         
         col1, col2 = st.columns(2)
         with col1:
-            n_input = st.text_input(get_translation("zero_number", st.session_state.lang) if hasattr(st.session_state, 'lang') else "رقم الصفر", value="167")
+            n_input = st.text_input(f"{translator.get_text('enter_number', st.session_state.language)} n:", value="167", key="zeta_zero_input")
         with col2:
-            method = st.selectbox(get_translation("calculation_method", st.session_state.lang) if hasattr(st.session_state, 'lang') else "طريقة الحساب", 
-                                ["auto", "accurate", "asymptotic"])
+            method = st.selectbox(
+                "Method:" if st.session_state.language == 'en' else "Méthode:" if st.session_state.language == 'fr' else "طريقة الحساب:",
+                ["auto", "accurate", "asymptotic"]
+            )
         
-        if st.button(get_translation("calculate", st.session_state.lang), type="primary"):
+        if st.button(translator.get_text('calculate', st.session_state.language), type="primary"):
             try:
                 n = parse_large_number(n_input)
                 if n < 1:
-                    st.error(get_translation("positive_number", st.session_state.lang) if hasattr(st.session_state, 'lang') else "يجب أن يكون العدد موجباً")
+                    st.error("n " + ('يجب أن يكون على الأقل 1' if st.session_state.language == 'ar' else 'must be at least 1' if st.session_state.language == 'en' else 'doit être au moins 1'))
                 else:
-                    with st.spinner(get_translation("calculating", st.session_state.lang) if hasattr(st.session_state, 'lang') else "جاري الحساب..."):
+                    with st.spinner('جاري حساب الصفر غير التافه...' if st.session_state.language == 'ar' else 'Calculating non-trivial zero...' if st.session_state.language == 'en' else 'Calcul du zéro non trivial...'):
                         start_time = time.time()
                         zero = zeta_zero_advanced(n, method=method, precise=True)
                         end_time = time.time()
                         
-                        st.success(f"**{get_translation('zeta_zero', st.session_state.lang)} #{n} = {zero:.15f}**")
+                        st.success(f"**{translator.get_text('zeta_function', st.session_state.language)} {n} = {zero:.15f}**")
                         
+                        # التحقق من الدقة للصفر 167
                         if n == 167:
                             correct_value = 346.3478705660099473959364598161519
                             error = abs(zero - correct_value)
-                            st.info(f"**{get_translation('error', st.session_state.lang)}:** {error:.2e}")
+                            st.info(f"**{'الخطأ:' if st.session_state.language == 'ar' else 'Error:' if st.session_state.language == 'en' else 'Erreur:'} {error:.2e}**")
                             if error < 1e-10:
                                 st.balloons()
-                                st.success(f"🎉 **{get_translation('success', st.session_state.lang)}!**")
+                                st.success("🎉 **" + ('الحساب دقيق جداً!' if st.session_state.language == 'ar' else 'Calculation very accurate!' if st.session_state.language == 'en' else 'Calcul très précis!') + "**")
                         
-                        st.metric(get_translation("time_taken", st.session_state.lang), f"{end_time - start_time:.3f} " + ("ثانية" if st.session_state.lang == 'ar' else "secondes" if st.session_state.lang == 'fr' else "seconds"))
+                        st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
                         
             except Exception as e:
-                st.error(f"❌ {get_translation('error', st.session_state.lang)}: {str(e)}")
+                st.error(f"❌ {translator.get_text('error', st.session_state.language)}: {e}")
     
-    # التحليل إلى عوامل أولية (باقي الخدمات بنفس النمط)
-    elif service == get_translation("prime_factorization", st.session_state.lang):
-        st.header(f"🔍 {get_translation('prime_factorization', st.session_state.lang)}")
+    # قسم التحليل إلى عوامل أولية
+    elif service == translator.get_text('prime_factorization', st.session_state.language):
+        st.header("🔍 " + translator.get_text('prime_factorization', st.session_state.language))
         
-        number_input = st.text_input(get_translation("number", st.session_state.lang), value="123456789")
-        timeout = st.slider(get_translation("timeout_seconds", st.session_state.lang) if hasattr(st.session_state, 'lang') else "المهلة (ثواني)", 
-                          min_value=1, max_value=300, value=30)
+        st.info(f"""
+        **{translator.get_text('supported_formats', st.session_state.language)}:**
+        - `123456789`
+        - `123,456,789` 
+        - `1.23456789e8`
+        - `2^50` {'أو' if st.session_state.language == 'ar' else 'or' if st.session_state.language == 'en' else 'ou'} `2**50`
+        """)
         
-        if st.button(get_translation("calculate", st.session_state.lang), type="primary"):
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            number_input = st.text_input(translator.get_text('enter_number', st.session_state.language) + ":", value="123456789", key="factorize_input")
+        with col2:
+            timeout = st.number_input(
+                "Timeout:" if st.session_state.language == 'en' else "Délai:" if st.session_state.language == 'fr' else "المهلة (بالثواني):",
+                min_value=1, value=30, step=1
+            )
+        
+        if st.button(translator.get_text('analyze', st.session_state.language), type="primary", key="factorize_btn"):
             try:
+                # تحليل العدد المدخل
                 number = parse_large_number(number_input)
-                st.success(f"**{get_translation('number', st.session_state.lang)}:** {format_large_number(number)}")
-                st.info(f"**{get_translation('digits_count', st.session_state.lang) if hasattr(st.session_state, 'lang') else 'عدد الأرقام'}:** {len(str(number))}")
+                st.success(f"**{translator.get_text('enter_number', st.session_state.language)}:** {format_large_number(number)}")
+                st.info(f"**{translator.get_text('digits_count', st.session_state.language)}:** {len(str(number))}")
                 
-                with st.spinner(get_translation("factorizing", st.session_state.lang) if hasattr(st.session_state, 'lang') else "جاري التحليل..."):
+                with st.spinner('جاري التحليل...' if st.session_state.language == 'ar' else 'Analyzing...' if st.session_state.language == 'en' else 'Analyse en cours...'):
                     start_time = time.time()
                     factors = factorize_fast(number, timeout=timeout)
                     end_time = time.time()
                     
+                    # عرض النتائج
                     if len(factors) == 1:
-                        st.success(f"**🎉 {get_translation('prime_status', st.session_state.lang)}:** {get_translation('is_prime', st.session_state.lang)}")
+                        st.success("**🎉 " + translator.get_text('prime_success', st.session_state.language) + "**")
                         st.balloons()
                     else:
                         cnt = Counter(factors)
@@ -1087,36 +1154,330 @@ def main():
                                 parts_str.append(f"{p}")
                         factorization = " × ".join(parts_str)
                         
-                        st.markdown(f'<div class="result-card {direction_class}">'
-                                  f'<strong>{get_translation("factorization", st.session_state.lang)}:</strong> {format_large_number(number)} = {factorization}'
+                        st.markdown(f'<div class="result-card">'
+                                  f'<strong>{translator.get_text("factorization", st.session_state.language)}:</strong> {format_large_number(number)} = {factorization}'
                                   f'</div>', unsafe_allow_html=True)
                         
-                        col1, col2 = st.columns(2)
+                        # عرض معلومات إضافية
+                        col1, col2, col3 = st.columns(3)
                         with col1:
-                            st.info(f"**{get_translation('total_factors', st.session_state.lang) if hasattr(st.session_state, 'lang') else 'إجمالي العوامل'}:** {len(factors)}")
+                            st.info(f"**{translator.get_text('factors', st.session_state.language)}:** {len(factors)}")
                         with col2:
-                            st.info(f"**{get_translation('distinct_factors', st.session_state.lang) if hasattr(st.session_state, 'lang') else 'العوامل المميزة'}:** {len(cnt)}")
+                            st.info(f"**{translator.get_text('unique_factors', st.session_state.language)}:** {len(cnt)}")
+                        with col3:
+                            st.info(f"**{translator.get_text('largest_factor', st.session_state.language)}:** {max(factors)}")
                     
-                    st.metric(get_translation("time_taken", st.session_state.lang), f"{end_time - start_time:.3f} " + ("ثانية" if st.session_state.lang == 'ar' else "secondes" if st.session_state.lang == 'fr' else "seconds"))
+                    st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
                     
             except Exception as e:
-                st.error(f"❌ {get_translation('error', st.session_state.lang)}: {str(e)}")
+                st.error(f"❌ {translator.get_text('error', st.session_state.language)}: {e}")
     
-    # الإعدادات
+    # قسم التحقق من الأعداد الأولية
+    elif service == translator.get_text('prime_check', st.session_state.language):
+        st.header("🔍 " + translator.get_text('prime_check', st.session_state.language))
+        
+        number_input = st.text_input(translator.get_text('enter_number', st.session_state.language) + ":", value="982451653", key="isprime_input")
+        
+        if st.button(translator.get_text('verify', st.session_state.language), type="primary"):
+            try:
+                number = parse_large_number(number_input)
+                st.info(f"**{translator.get_text('enter_number', st.session_state.language)}:** {format_large_number(number)}")
+                st.info(f"**{translator.get_text('digits_count', st.session_state.language)}:** {len(str(number))}")
+                
+                with st.spinner('جاري التحقق...' if st.session_state.language == 'ar' else 'Verifying...' if st.session_state.language == 'en' else 'Vérification en cours...'):
+                    start_time = time.time()
+                    is_prime = is_prime_fast(number)
+                    end_time = time.time()
+                    
+                    if is_prime:
+                        st.success("🎉 **" + translator.get_text('prime_success', st.session_state.language) + "**")
+                        st.balloons()
+                    else:
+                        st.error("❌ **" + translator.get_text('composite_number', st.session_state.language) + "**")
+                    
+                    st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+                    
+            except Exception as e:
+                st.error(f"❌ {translator.get_text('error', st.session_state.language)}: {e}")
+    
+    # قسم أعداد ميرسين الأولية
+    elif service == translator.get_text('mersenne_primes', st.session_state.language):
+        st.header("🎯 " + translator.get_text('mersenne_primes', st.session_state.language))
+        
+        show_latex_formula(
+            translator.get_text('mersenne_formula', st.session_state.language),
+            "Mersenne Primes" if st.session_state.language == 'en' else "Nombres de Mersenne" if st.session_state.language == 'fr' else "أعداد ميرسين",
+            translator.get_text('mersenne_description', st.session_state.language)
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            n1 = st.number_input(
+                "Minimum:" if st.session_state.language == 'en' else "Minimum:" if st.session_state.language == 'fr' else "الحد الأدنى:",
+                min_value=1, value=1, step=1
+            )
+        with col2:
+            n2 = st.number_input(
+                "Maximum:" if st.session_state.language == 'en' else "Maximum:" if st.session_state.language == 'fr' else "الحد الأقصى:",
+                min_value=n1+1, value=10000, step=1
+            )
+        
+        if st.button(translator.get_text('search', st.session_state.language), type="primary"):
+            with st.spinner('جاري البحث...' if st.session_state.language == 'ar' else 'Searching...' if st.session_state.language == 'en' else 'Recherche en cours...'):
+                start_time = time.time()
+                results = mersenne_primes_between(n1, n2)
+                end_time = time.time()
+                
+                if results:
+                    success_msg = f"**{'تم العثور على' if st.session_state.language == 'ar' else 'Found' if st.session_state.language == 'en' else 'Trouvé'} {len(results)} {'أعداد ميرسين أولية بين' if st.session_state.language == 'ar' else 'Mersenne primes between' if st.session_state.language == 'en' else 'nombres de Mersenne premiers entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}:**"
+                    st.success(success_msg)
+                    
+                    for p, m in results:
+                        st.markdown(f"""
+                        <div class="result-card">
+                            <strong>2<sup>{p}</sup> - 1 = {format_large_number(m)}</strong>
+                            <div style="color: #10B981; margin-top: 8px;">✓ {translator.get_text('prime_number', st.session_state.language)}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    warning_msg = f"**{'لم يتم العثور على أعداد ميرسين أولية بين' if st.session_state.language == 'ar' else 'No Mersenne primes found between' if st.session_state.language == 'en' else 'Aucun nombre de Mersenne premier trouvé entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}**"
+                    st.warning(warning_msg)
+                
+                st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+    
+    # قسم حدسية غولدباخ
+    elif service == translator.get_text('goldbach_conjecture', st.session_state.language):
+        st.header("🧮 " + translator.get_text('goldbach_conjecture', st.session_state.language))
+        
+        show_latex_formula(
+            r"n = p + q \quad \text{حيث } p, q \text{ أوليان}",
+            "حدسية غولدباخ",
+            translator.get_text('goldbach_conjecture_text', st.session_state.language)
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            n1 = st.number_input(
+                "الحد الأدنى:" if st.session_state.language == 'ar' else "Minimum:" if st.session_state.language == 'en' else "Minimum:",
+                min_value=4, value=4, step=2
+            )
+        with col2:
+            n2 = st.number_input(
+                "الحد الأقصى:" if st.session_state.language == 'ar' else "Maximum:" if st.session_state.language == 'en' else "Maximum:",
+                min_value=n1+2, value=100, step=2
+            )
+        
+        if st.button(translator.get_text('verify', st.session_state.language), type="primary"):
+            with st.spinner('جاري التحقق...' if st.session_state.language == 'ar' else 'Verifying...' if st.session_state.language == 'en' else 'Vérification en cours...'):
+                start_time = time.time()
+                results = goldbach_pairs_between(n1, n2)
+                end_time = time.time()
+                
+                if results:
+                    success_msg = f"**{'تم العثور على' if st.session_state.language == 'ar' else 'Found' if st.session_state.language == 'en' else 'Trouvé'} {len(results)} {'أزواج غولدباخ بين' if st.session_state.language == 'ar' else 'Goldbach pairs between' if st.session_state.language == 'en' else 'paires de Goldbach entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}:**"
+                    st.success(success_msg)
+                    
+                    for n, primes in results:
+                        st.markdown(f"""
+                        <div class="result-card">
+                            <strong>{n} = {primes[0]} + {primes[1]}</strong>
+                            <div style="color: #10B981; margin-top: 8px;">✓ {translator.get_text('verified', st.session_state.language) if 'verified' in translator.languages[st.session_state.language] else 'تم التحقق'}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    warning_msg = f"**{'لم يتم العثور على أزواج غولدباخ بين' if st.session_state.language == 'ar' else 'No Goldbach pairs found between' if st.session_state.language == 'en' else 'Aucune paire de Goldbach trouvée entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}**"
+                    st.warning(warning_msg)
+                
+                st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+    
+    # قسم الأعداد الأولية في نطاق
+    elif service == translator.get_text('primes_in_range', st.session_state.language):
+        st.header("📊 " + translator.get_text('primes_in_range', st.session_state.language))
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            n1 = st.number_input(
+                "من:" if st.session_state.language == 'ar' else "From:" if st.session_state.language == 'en' else "De:",
+                min_value=0, value=1, step=1, key="primes_from"
+            )
+        with col2:
+            n2 = st.number_input(
+                "إلى:" if st.session_state.language == 'ar' else "To:" if st.session_state.language == 'en' else "À:",
+                min_value=n1+1, value=100, step=1, key="primes_to"
+            )
+        
+        if st.button(translator.get_text('search', st.session_state.language), type="primary"):
+            with st.spinner('جاري البحث...' if st.session_state.language == 'ar' else 'Searching...' if st.session_state.language == 'en' else 'Recherche en cours...'):
+                start_time = time.time()
+                primes = primes_between(n1, n2)
+                end_time = time.time()
+                
+                if primes:
+                    success_msg = f"**{'تم العثور على' if st.session_state.language == 'ar' else 'Found' if st.session_state.language == 'en' else 'Trouvé'} {len(primes)} {'عدد أولي بين' if st.session_state.language == 'ar' else 'prime numbers between' if st.session_state.language == 'en' else 'nombres premiers entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}:**"
+                    st.success(success_msg)
+                    
+                    # عرض الأعداد الأولية في أعمدة
+                    cols = 5
+                    rows = (len(primes) + cols - 1) // cols
+                    
+                    for i in range(rows):
+                        col1, col2, col3, col4, col5 = st.columns(5)
+                        with col1:
+                            if i < len(primes):
+                                st.info(primes[i])
+                        with col2:
+                            if i + rows < len(primes):
+                                st.info(primes[i + rows])
+                        with col3:
+                            if i + 2*rows < len(primes):
+                                st.info(primes[i + 2*rows])
+                        with col4:
+                            if i + 3*rows < len(primes):
+                                st.info(primes[i + 3*rows])
+                        with col5:
+                            if i + 4*rows < len(primes):
+                                st.info(primes[i + 4*rows])
+                else:
+                    warning_msg = f"**{'لم يتم العثور على أعداد أولية بين' if st.session_state.language == 'ar' else 'No prime numbers found between' if st.session_state.language == 'en' else 'Aucun nombre premier trouvé entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}**"
+                    st.warning(warning_msg)
+                
+                st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+    
+    # قسم العدد الأولي رقم n
+    elif service == translator.get_text('nth_prime', st.session_state.language):
+        st.header("🔢 " + translator.get_text('nth_prime', st.session_state.language))
+        
+        n_input = st.text_input(f"{translator.get_text('enter_number', st.session_state.language)} n:", value="1000", key="nth_prime_input")
+        
+        if st.button(translator.get_text('calculate', st.session_state.language), type="primary"):
+            try:
+                n = parse_large_number(n_input)
+                if n < 1:
+                    st.error("n " + ('يجب أن يكون على الأقل 1' if st.session_state.language == 'ar' else 'must be at least 1' if st.session_state.language == 'en' else 'doit être au moins 1'))
+                else:
+                    with st.spinner('جاري البحث...' if st.session_state.language == 'ar' else 'Searching...' if st.session_state.language == 'en' else 'Recherche en cours...'):
+                        start_time = time.time()
+                        prime = nth_prime(n)
+                        end_time = time.time()
+                        
+                        st.success(f"**{translator.get_text('prime_number', st.session_state.language)} {n} = {format_large_number(prime)}**")
+                        st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+                        
+            except Exception as e:
+                st.error(f"❌ {translator.get_text('error', st.session_state.language)}: {e}")
+    
+    # قسم دالة زيتا العامة
+    elif service == translator.get_text('zeta_function', st.session_state.language):
+        st.header("𝛇 " + translator.get_text('zeta_function', st.session_state.language))
+        
+        show_latex_formula(
+            r"\zeta(s) = \sum_{n=1}^{\infty} \frac{1}{n^s}",
+            translator.get_text('zeta_function', st.session_state.language),
+            "دالة زيتا لريمان" if st.session_state.language == 'ar' else "Riemann Zeta Function" if st.session_state.language == 'en' else "Fonction Zêta de Riemann"
+        )
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            s_real = st.text_input("الجزء الحقيقي لـ s:" if st.session_state.language == 'ar' else "Real part of s:" if st.session_state.language == 'en' else "Partie réelle de s:", value="0.5", key="zeta_s_real")
+        with col2:
+            s_imag = st.text_input("الجزء التخيلي لـ s:" if st.session_state.language == 'ar' else "Imaginary part of s:" if st.session_state.language == 'en' else "Partie imaginaire de s:", value="14.134725", key="zeta_s_imag")
+        
+        if st.button(translator.get_text('calculate', st.session_state.language), type="primary"):
+            try:
+                s_real_val = float(s_real)
+                s_imag_val = float(s_imag)
+                s = complex(s_real_val, s_imag_val)
+                
+                with st.spinner('جاري حساب دالة زيتا...' if st.session_state.language == 'ar' else 'Calculating zeta function...' if st.session_state.language == 'en' else 'Calcul de la fonction zêta...'):
+                    start_time = time.time()
+                    zeta_val = zeta_function(s)
+                    end_time = time.time()
+                    
+                    st.success(f"**ζ({s}) = {zeta_val}**")
+                    st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+                    
+            except Exception as e:
+                st.error(f"❌ {translator.get_text('error', st.session_state.language)}: {e}")
+    
+    # قسم دالة العد الأولي (π)
+    elif service == translator.get_text('prime_pi', st.session_state.language):
+        st.header("π " + translator.get_text('prime_pi', st.session_state.language))
+        
+        show_latex_formula(
+            r"\pi(x) = \# \{ p \leq x : p \text{ is prime} \}",
+            translator.get_text('prime_pi', st.session_state.language),
+            "دالة العد الأولي: عدد الأعداد الأولية ≤ x" if st.session_state.language == 'ar' else "Prime counting function: number of primes ≤ x" if st.session_state.language == 'en' else "Fonction de compte des nombres premiers: nombre de premiers ≤ x"
+        )
+        
+        x_input = st.text_input("x:" if st.session_state.language == 'en' else "x :" if st.session_state.language == 'fr' else "x:", value="1000000", key="prime_pi_input")
+        
+        if st.button(translator.get_text('calculate', st.session_state.language), type="primary"):
+            try:
+                x = parse_large_number(x_input)
+                if x < 0:
+                    st.error("x " + ('يجب أن يكون غير سالب' if st.session_state.language == 'ar' else 'must be non-negative' if st.session_state.language == 'en' else 'doit être non négatif'))
+                else:
+                    with st.spinner('جاري الحساب...' if st.session_state.language == 'ar' else 'Calculating...' if st.session_state.language == 'en' else 'Calcul en cours...'):
+                        start_time = time.time()
+                        pi_x = prime_pi(x)
+                        end_time = time.time()
+                        
+                        st.success(f"**π({format_large_number(x)}) = {format_large_number(pi_x)}**")
+                        st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+                        
+            except Exception as e:
+                st.error(f"❌ {translator.get_text('error', st.session_state.language)}: {e}")
+    
+    # قسم حساب π بدقة عالية
+    elif service == "حساب π بدقة عالية":
+        st.header("π حساب π بدقة عالية")
+        
+        show_latex_formula(
+            r"\pi = 4 \sum_{k=0}^{\infty} \frac{(-1)^k}{2k+1}",
+            "حساب π",
+            "متسلسلة لايبنتز لحساب π"
+        )
+        
+        precision = st.slider(
+            "الدقة (عدد المنازل العشرية):" if st.session_state.language == 'ar' else "Precision (decimal places):" if st.session_state.language == 'en' else "Précision (décimales):",
+            min_value=10, max_value=1000, value=100, step=10
+        )
+        
+        if st.button(translator.get_text('calculate', st.session_state.language), type="primary"):
+            with st.spinner('جاري حساب π...' if st.session_state.language == 'ar' else 'Calculating π...' if st.session_state.language == 'en' else 'Calcul de π...'):
+                start_time = time.time()
+                pi_value = calculate_pi(precision)
+                end_time = time.time()
+                
+                st.success(f"**π = {pi_value}**")
+                st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+                
+                # عرض أول 50 رقم من π
+                if len(pi_value) > 50:
+                    st.info(f"**أول 50 رقم من π:** {pi_value[:52]}...")
+    
+    # معلومات إضافية في الشريط الجانبي
     st.sidebar.markdown("---")
-    st.sidebar.header(get_translation("settings", st.session_state.lang))
-    if st.sidebar.button(get_translation("clear_cache", st.session_state.lang)):
+    st.sidebar.header("ℹ️ " + ('معلومات الأعداد الكبيرة' if st.session_state.language == 'ar' else 'Large Numbers Info' if st.session_state.language == 'en' else 'Info Grands Nombres'))
+    st.sidebar.info(f"""
+    **{translator.get_text('supported_formats', st.session_state.language)}:**
+    - `123,456,789` ({'بفواصل' if st.session_state.language == 'ar' else 'with commas' if st.session_state.language == 'en' else 'avec virgules'})
+    - `1.23e8` ({'ترميز علمي' if st.session_state.language == 'ar' else 'scientific notation' if st.session_state.language == 'en' else 'notation scientifique'})  
+    - `2^50` {'أو' if st.session_state.language == 'ar' else 'or' if st.session_state.language == 'en' else 'ou'} `2**50` ({'قوى' if st.session_state.language == 'ar' else 'powers' if st.session_state.language == 'en' else 'puissances'})
+    - `123456789` ({'عادي' if st.session_state.language == 'ar' else 'normal' if st.session_state.language == 'en' else 'normal'})
+    """)
+    
+    st.sidebar.header("⚙️ " + translator.get_text('settings', st.session_state.language))
+    if st.sidebar.button(translator.get_text('clear_cache', st.session_state.language)):
         is_prime_fast.cache_clear()
         cached_zeta_zero.cache_clear()
-        st.session_state.cache_cleared = True
-        st.sidebar.success(get_translation("cache_cleared", st.session_state.lang))
+        st.sidebar.success(translator.get_text('cache_cleared', st.session_state.language))
     
     # التذييل
     st.markdown(f"""
-    <div style="text-align: {'right' if st.session_state.lang == 'ar' else 'center'}; padding: 30px; margin-top: 3rem; color: #64748b; font-size: 0.95rem; border-top: 1px solid #e2e8f0;">
-        <p>✨ PPFO v30.0 - {get_translation('app_title', st.session_state.lang)}</p>
-        <p>{get_translation('about', st.session_state.lang) if hasattr(st.session_state, 'lang') else 'تطبيق رياضي متقدم متعدد اللغات مع دعم كامل للصيغ الرياضية'}</p>
-        <p>© 2025 - {get_translation('all_rights_reserved', st.session_state.lang) if hasattr(st.session_state, 'lang') else 'جميع الحقوق محفوظة'}</p>
+    <div style="text-align: center; padding: 20px; margin-top: 2rem; color: #64748b; font-size: 0.9rem; border-top: 1px solid #e2e8f0;">
+        <p>✨ {translator.get_text('footer', st.session_state.language)}</p>
+        <p>{translator.get_text('copyright', st.session_state.language)}</p>
     </div>
     """, unsafe_allow_html=True)
 
