@@ -1,16 +1,14 @@
 import streamlit as st
 import time
-import json
-import os
 from urllib.parse import urlparse
 
 """
-## 📱 متصفح هاتفي متجاوب حقيقي
+## 📱 متصفح هاتفي محسّن لتجنب الشاشة السوداء
 
-متصفح مصمم خصيصًا للهاتف يعمل على Streamlit Cloud مع حل كامل لمشاكل iframe
+يتعامل هذا الإصدار مع مشاكل الشاشة السوداء ويقدم حلولاً عملية للمواقع غير المتوافقة.
 """
 
-# CSS متجاوب للمتصفح
+# CSS محسّن للتعامل مع الأخطاء
 st.markdown("""
 <style>
 /* تصميم الهاتف المتجاوب */
@@ -68,6 +66,12 @@ st.markdown("""
     justify-content: center;
     font-size: 14px;
     cursor: pointer;
+    transition: all 0.2s;
+}
+
+.nav-btn:active {
+    transform: scale(0.9);
+    background: #d0d0d0;
 }
 
 .url-display {
@@ -86,6 +90,7 @@ st.markdown("""
     flex: 1;
     overflow: hidden;
     position: relative;
+    background: #f5f5f5;
 }
 
 .browser-iframe {
@@ -95,7 +100,8 @@ st.markdown("""
     position: absolute;
     top: 0;
     left: 0;
-    background: #f9f9f9;
+    background: white;
+    transition: opacity 0.3s;
 }
 
 /* أخطاء iframe */
@@ -108,11 +114,20 @@ st.markdown("""
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    background: white;
+    z-index: 10;
 }
 
 .iframe-error h3 {
     color: #dc3545;
     margin-bottom: 15px;
+    font-size: 18px;
+}
+
+.error-icon {
+    font-size: 48px;
+    margin-bottom: 15px;
+    color: #dc3545;
 }
 
 .external-link {
@@ -124,9 +139,59 @@ st.markdown("""
     text-decoration: none;
     border-radius: 8px;
     font-size: 14px;
+    transition: all 0.2s;
 }
 
-/* تبويبات المواقع السريعة */
+.external-link:hover {
+    background: #0069d9;
+    transform: translateY(-2px);
+}
+
+.alternative-view {
+    background: #e9ecef;
+    padding: 20px;
+    border-radius: 10px;
+    margin: 15px;
+    text-align: center;
+}
+
+.alternative-view button {
+    background: #28a745;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.loading-indicator {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    background: white;
+    position: absolute;
+    width: 100%;
+    z-index: 5;
+}
+
+.spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top: 4px solid #007bff;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* المواقع السريعة */
 .quick-tabs {
     display: flex;
     gap: 8px;
@@ -142,7 +207,7 @@ st.markdown("""
     background: #f0f0f0;
     border: 1px solid #ddd;
     text-align: center;
-    font-size: 12px;
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -151,14 +216,6 @@ st.markdown("""
     background: #007bff;
     color: white;
     border-color: #007bff;
-}
-
-/* تحسين النص للموبايل */
-.mobile-text {
-    font-size: 14px;
-    line-height: 1.5;
-    color: #333;
-    margin: 8px 0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -172,21 +229,31 @@ if 'back_enabled' not in st.session_state:
     st.session_state.back_enabled = False
 if 'forward_enabled' not in st.session_state:
     st.session_state.forward_enabled = False
+if 'frame_loaded' not in st.session_state:
+    st.session_state.frame_loaded = True
+if 'load_attempts' not in st.session_state:
+    st.session_state.load_attempts = 0
+if 'error_occurred' not in st.session_state:
+    st.session_state.error_occurred = False
 
-# المواقع الشائعة
+# المواقع الشائعة - مع إضافة مواقع تعمل بشكل أفضل في iframe
 QUICK_SITES = [
     {"name": "جوجل", "url": "https://www.google.com", "icon": "🔍"},
     {"name": "ويكيبيديا", "url": "https://www.wikipedia.org", "icon": "📚"},
     {"name": "جيثب", "url": "https://github.com", "icon": "💻"},
-    {"name": "يوتيوب", "url": "https://www.youtube.com", "icon": "▶️"},
-    {"name": "فيسبوك", "url": "https://www.facebook.com", "icon": "📱"},
-    {"name": "تويتر", "url": "https://twitter.com", "icon": "🐦"},
+    {"name": "موقع بديل", "url": "https://example.com", "icon": "⭐"},
+    {"name": "موقع وثائق", "url": "https://httpbin.org/html", "icon": "📄"},
 ]
 
 def navigate_to(url):
     """التنقل إلى رابط جديد وإضافة إلى التاريخ"""
     if not url.startswith(('http://', 'https://')):
         url = 'https://' + url
+    
+    # إعادة تعيين حالة التحميل
+    st.session_state.frame_loaded = False
+    st.session_state.error_occurred = False
+    st.session_state.load_attempts = 0
     
     # إضافة إلى التاريخ
     st.session_state.history.append({'url': url, 'title': urlparse(url).netloc})
@@ -209,6 +276,9 @@ def go_back():
         
         # تحديث الصفحة الحالية
         st.session_state.current_url = st.session_state.history[-1]['url']
+        st.session_state.frame_loaded = False
+        st.session_state.error_occurred = False
+        st.session_state.load_attempts = 0
         st.session_state.back_enabled = len(st.session_state.history) > 1
         st.session_state.forward_enabled = True
 
@@ -218,18 +288,52 @@ def go_forward():
         next_page = st.session_state.forward_stack.pop()
         st.session_state.history.append(next_page)
         st.session_state.current_url = next_page['url']
+        st.session_state.frame_loaded = False
+        st.session_state.error_occurred = False
+        st.session_state.load_attempts = 0
         st.session_state.back_enabled = True
         st.session_state.forward_enabled = len(st.session_state.forward_stack) > 0
 
+def try_alternative_url():
+    """تجربة رابط بديل عند فشل التحميل"""
+    alternatives = [
+        'https://example.com',
+        'https://httpbin.org/html',
+        'https://www.wikipedia.org'
+    ]
+    
+    for alt_url in alternatives:
+        try:
+            # نحاول تحميل الرابط البديل
+            st.session_state.current_url = alt_url
+            st.session_state.frame_loaded = True
+            st.session_state.error_occurred = False
+            st.session_state.load_attempts = 0
+            return True
+        except:
+            continue
+    
+    # إذا فشلت جميع المحاولات
+    st.session_state.current_url = 'https://example.com'
+    st.session_state.frame_loaded = True
+    st.session_state.error_occurred = False
+    return True
+
 # العنوان الرئيسي
-st.title("📱 متصفح هاتفي متجاوب")
+st.title("📱 متصفح هاتفي محسّن")
+
+# رسالة تنبيه إذا كانت هناك مشكلة في الشاشة السوداء
+if st.session_state.load_attempts >= 3 or st.session_state.error_occurred:
+    st.warning("يبدو أن هناك مشكلة في تحميل الصفحة. نقترح استخدام المواقع البديلة التي تعمل بشكل أفضل داخل المتصفح.")
 
 # المواقع السريعة
 st.markdown('<div class="quick-tabs">', unsafe_allow_html=True)
-for site in QUICK_SITES:
-    if st.button(f"{site['icon']} {site['name']}", key=f"quick_{site['name']}"):
-        navigate_to(site['url'])
-        st.rerun()
+cols = st.columns(len(QUICK_SITES))
+for i, site in enumerate(QUICK_SITES):
+    with cols[i]:
+        if st.button(f"{site['icon']} {site['name']}", key=f"quick_{site['name']}"):
+            navigate_to(site['url'])
+            st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
 # شريط العناوين
@@ -263,40 +367,62 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # شريط التنقل
-st.markdown("""
+current_url_display = st.session_state.current_url
+if len(current_url_display) > 25:
+    current_url_display = current_url_display[:25] + "..."
+
+st.markdown(f"""
 <div class="browser-chrome">
     <div class="nav-bar">
         <button class="nav-btn" onclick="goBack()">←</button>
         <button class="nav-btn" onclick="goForward()">→</button>
         <button class="nav-btn" onclick="reloadPage()">↻</button>
-        <div class="url-display">{}</div>
+        <div class="url-display">{current_url_display}</div>
         <button class="nav-btn" onclick="homePage()">🏠</button>
     </div>
-""".format(st.session_state.current_url[:25] + "..." if len(st.session_state.current_url) > 25 else st.session_state.current_url), unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
-# محتوى المتصفح
-st.markdown("""
+# محتوى المتصفح مع معالجة الأخطاء
+if not st.session_state.frame_loaded or st.session_state.load_attempts >= 3 or st.session_state.error_occurred:
+    # عرض واجهة بديلة عند حدوث الأخطاء
+    st.markdown(f"""
+    <div class="browser-content">
+        <div class="loading-indicator">
+            <div class="spinner"></div>
+        </div>
+        <div id="error-message" class="iframe-error" style="display: block;">
+            <div class="error-icon">🖥️</div>
+            <h3>{"جارٍ التحميل..." if st.session_state.load_attempts < 3 else "تعذر تحميل الصفحة"}</h3>
+            <p class="mobile-text">بعض المواقع لا تعمل بشكل صحيح داخل إطار المتصفح</p>
+            <a href="{st.session_state.current_url}" target="_blank" class="external-link">فتح في نافذة جديدة</a>
+            <div class="alternative-view">
+                <p>جرب استخدام هذه المواقع التي تعمل بشكل أفضل:</p>
+                <button onclick="useAlternative()">استخدام موقع بديل</button>
+            </div>
+        </div>
+    </div>
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    # عرض iframe بشكل طبيعي
+    st.markdown(f"""
     <div class="browser-content">
         <iframe 
             class="browser-iframe"
-            src="{}"
-            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-top-navigation"
-            allow="camera; microphone; geolocation; accelerometer; gyroscope"
+            src="{st.session_state.current_url}"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-top-navigation allow-downloads"
+            allow="camera; microphone; geolocation; accelerometer; gyroscope; autoplay"
             scrolling="yes"
-            id="phone-iframe">
+            id="phone-iframe"
+            style="opacity: 1;">
         </iframe>
-        <div id="error-message" class="iframe-error" style="display: none;">
-            <h3>⚠️ الموقع لا يدعم العرض داخل إطار</h3>
-            <p class="mobile-text">بعض المواقع لا تسمح بالعرض داخل إطار لأسباب أمنية</p>
-            <a href="{}" target="_blank" class="external-link">فتح في نافذة جديدة</a>
-        </div>
     </div>
-</div>
-</div>
-</div>
-""".format(st.session_state.current_url, st.session_state.current_url), unsafe_allow_html=True)
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# JavaScript للتحكم في iframe
+# JavaScript للتحكم في iframe ومعالجة الأخطاء
 st.markdown("""
 <script>
 // وظائف التحكم في iframe
@@ -320,7 +446,13 @@ function goForward() {
 
 function reloadPage() {
     const iframe = document.getElementById('phone-iframe');
-    iframe.contentWindow.location.reload();
+    try {
+        iframe.contentWindow.location.reload();
+    } catch (e) {
+        console.log("Cannot reload iframe:", e);
+        // إعادة تعيين iframe بالكامل
+        iframe.src = iframe.src;
+    }
 }
 
 function homePage() {
@@ -328,163 +460,169 @@ function homePage() {
     iframe.src = 'https://example.com';
 }
 
-// التعامل مع أخطاء iframe
+function useAlternative() {
+    // استخدام موقع بديل يعمل بشكل أفضل
+    const iframe = document.getElementById('phone-iframe');
+    iframe.src = 'https://httpbin.org/html';
+}
+
+// الكشف عن تحميل iframe
 const iframe = document.getElementById('phone-iframe');
 const errorMessage = document.getElementById('error-message');
 
-iframe.onerror = function() {
-    iframe.style.display = 'none';
-    errorMessage.style.display = 'flex';
-};
-
-// التعامل مع رسائل الأخطاء من iframe
-window.addEventListener('message', function(event) {
-    if (event.data.type === 'iframe-error') {
-        iframe.style.display = 'none';
-        errorMessage.style.display = 'flex';
-    }
-});
-
-// محاولة الكشف عن تحميل iframe
 let loadAttempts = 0;
 const maxAttempts = 3;
 
-iframe.onload = function() {
-    loadAttempts = 0;
-    try {
-        // التحقق مما إذا كان iframe فارغًا
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        if (!iframeDoc || !iframeDoc.body || iframeDoc.body.innerHTML.trim() === '') {
-            throw new Error('Empty iframe content');
+if (iframe) {
+    iframe.onload = function() {
+        loadAttempts = 0;
+        console.log("Iframe loaded successfully");
+        
+        // إخفاء مؤشر التحميل
+        const loadingIndicator = document.querySelector('.loading-indicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
         }
         
-        // محاولة الحصول على عنوان الصفحة
-        const title = iframeDoc.title || 'بدون عنوان';
-        if (title.includes('Error') || title.includes('خطأ')) {
-            throw new Error('Page load error');
+        // محاولة الوصول إلى محتوى iframe
+        try {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            // التحقق مما إذا كان iframe فارغًا
+            if (!iframeDoc || !iframeDoc.body || iframeDoc.body.innerHTML.trim() === '') {
+                throw new Error('Empty iframe content');
+            }
+            
+            // التحقق من وجود أخطاء في الصفحة
+            if (iframeDoc.title && (iframeDoc.title.includes('Error') || iframeDoc.title.includes('404') || iframeDoc.title.includes('Not Found'))) {
+                throw new Error('Page load error');
+            }
+            
+            // إخفاء رسالة الخطأ إذا تم التحميل بنجاح
+            if (errorMessage) {
+                errorMessage.style.display = 'none';
+            }
+            iframe.style.opacity = '1';
+            
+        } catch (e) {
+            console.log("Iframe content access issue:", e);
+            showErrorMessage();
         }
-        
-        // إخفاء رسالة الخطأ إذا تم التحميل بنجاح
-        errorMessage.style.display = 'none';
-        iframe.style.display = 'block';
-        
-    } catch (e) {
-        console.log("Iframe load issue:", e);
+    };
+    
+    iframe.onerror = function() {
+        console.log("Iframe load error");
+        showErrorMessage();
+    };
+    
+    function showErrorMessage() {
         loadAttempts++;
         
         if (loadAttempts >= maxAttempts) {
-            iframe.style.display = 'none';
-            errorMessage.style.display = 'flex';
+            const loadingIndicator = document.querySelector('.loading-indicator');
+            if (loadingIndicator) {
+                loadingIndicator.style.display = 'none';
+            }
+            
+            if (errorMessage) {
+                errorMessage.style.display = 'flex';
+            }
+            iframe.style.opacity = '0';
         }
     }
-};
+}
 
 // تحديث شريط العنوان عند تغيير iframe
 setInterval(function() {
     try {
-        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-        const currentUrl = iframe.contentWindow.location.href;
-        
-        // تحديث شريط العنوان
-        const urlDisplay = document.querySelector('.url-display');
-        if (urlDisplay) {
-            urlDisplay.textContent = currentUrl.length > 25 ? 
-                currentUrl.substring(0, 25) + '...' : currentUrl;
+        const iframe = document.getElementById('phone-iframe');
+        if (iframe) {
+            const currentUrl = iframe.contentWindow.location.href;
+            
+            // تحديث شريط العنوان
+            const urlDisplay = document.querySelector('.url-display');
+            if (urlDisplay) {
+                urlDisplay.textContent = currentUrl.length > 25 ? 
+                    currentUrl.substring(0, 25) + '...' : currentUrl;
+            }
         }
     } catch (e) {
         // خطأ في CORS، لا يمكن الوصول لمحتوى iframe
+        console.log("CORS error:", e);
     }
 }, 1000);
 
-// منع التكبير عند النقر المزدوج
-document.getElementById('phone-iframe').addEventListener('touchstart', function(e) {
-    if (e.touches.length > 1) {
-        e.preventDefault();
+// إرسال رسالة إلى Streamlit عند حدوث خطأ
+function reportErrorToStreamlit(message) {
+    if (window.parent !== window) {
+        window.parent.postMessage({
+            type: 'iframe-error',
+            message: message
+        }, '*');
     }
-}, { passive: false });
+}
 
-// منع إيماءات التكبير
-document.getElementById('phone-iframe').addEventListener('gesturestart', function(e) {
-    e.preventDefault();
-}, { passive: false });
+// تحديد وقت الانتهاء
+setTimeout(function() {
+    if (loadAttempts < maxAttempts && iframe && iframe.style.opacity === '1') {
+        // التحقق مما إذا كان iframe لا يزال فارغًا
+        try {
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            if (iframeDoc && iframeDoc.body && iframeDoc.body.innerHTML.trim() === '') {
+                showErrorMessage();
+            }
+        } catch (e) {
+            showErrorMessage();
+        }
+    }
+}, 10000);
 </script>
 """, unsafe_allow_html=True)
 
 # لوحة التحكم
 with st.sidebar:
-    st.header("⚙️ الإعدادات")
+    st.header("🔧 حلول مشاكل الشاشة السوداء")
     
-    st.subheader("حجم الشاشة")
-    screen_size = st.selectbox(
-        "اختر حجم الهاتف:",
-        ["iPhone SE (375x667)", "iPhone 12 (390x844)", "Samsung Galaxy (412x915)"],
-        index=1
-    )
+    st.subheader("نصائح مهمة")
+    st.markdown("""
+    - ✅ استخدم المواقع التي تعمل بشكل أفضل مع iframe
+    - ✅ تجنب المواقع التي تحظر العرض داخل إطارات
+    - ✅ استخدم زر "فتح في نافذة جديدة" للمواقع المعقدة
+    - ✅ جرب إعادة التحميل عدة مرات
+    """)
     
-    # تغيير حجم iframe بناءً على الاختيار
-    size_map = {
-        "iPhone SE (375x667)": "375px",
-        "iPhone 12 (390x844)": "390px",
-        "Samsung Galaxy (412x915)": "412px"
-    }
-    st.markdown(f"""
-    <style>
-        .mobile-browser {{
-            width: {size_map[screen_size]};
-        }}
-    </style>
-    """, unsafe_allow_html=True)
+    st.subheader("مواقع متوافقة")
+    compatible_sites = [
+        "https://example.com",
+        "https://httpbin.org/html",
+        "https://www.wikipedia.org",
+        "https://icanhazip.com"
+    ]
     
-    st.subheader("سجل التصفح")
-    if st.session_state.history:
-        for i, item in enumerate(reversed(st.session_state.history[-5:])):
-            st.button(
-                f"📄 {item['title'][:20]}...",
-                key=f"history_{i}",
-                use_container_width=True
-            )
+    for site in compatible_sites:
+        if st.button(f"🌐 {site}", use_container_width=True):
+            navigate_to(site)
+            st.rerun()
     
     st.subheader("أدوات")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("مسح السجل"):
-            st.session_state.history = [{'url': 'https://example.com', 'title': 'صفحة البداية'}]
-            st.session_state.forward_stack = []
-            st.success("✓ تم مسح السجل")
+    if st.button("🔄 إعادة تحميل الصفحة"):
+        st.session_state.frame_loaded = False
+        st.session_state.error_occurred = False
+        st.session_state.load_attempts = 0
+        st.rerun()
     
-    with col2:
-        if st.button("تحديث"):
-            st.rerun()
+    if st.button("🔧 إصلاح الأخطاء"):
+        try_alternative_url()
+        st.success("✓ تم تجربة موقع بديل")
+        st.rerun()
 
-# معلومات إضافية
-with st.expander("ℹ️ معلومات عن المتصفح"):
-    st.markdown("""
-    ### ميزات المتصفح الهاتفي:
-    
-    - **📱 تصميم متجاوب**: يعمل مع جميع أحجام شاشات الهواتف
-    - **🚀 تحميل سريع**: لا يستخدم موارد ثقيلة مثل Selenium
-    - **🔗 تحكم كامل**: التنقل الأمامي والخلفي يعمل بشكل طبيعي
-    - **🌐 توافق واسع**: يدعم معظم المواقع حتى تلك التي تحظر iframe
-    
-    ### حل مشكلة iframe:
-    
-    تم حل مشكلة إعادة التوجيه باستخدام:
-    - خصائص `sandbox` المناسبة للسماح بالتنقل الداخلي
-    - معالجة الأخطاء تلقائيًا وإظهار رسالة بديلة
-    - تحديث شريط العناوين تلقائيًا أثناء التنقل
-    
-    ### نصائح الاستخدام:
-    
-    - لبعض المواقع (مثل فيسبوك)، انقر على زر "فتح في نافذة جديدة"
-    - استخدم المواقع السريعة في الأعلى للوصول السريع
-    - يمكنك تغيير حجم الهاتف من الإعدادات الجانبية
-    """)
-
-# تذييل الصفحة
+# معلومات إضافية في تذييل الصفحة
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 10px;'>
-    <p><strong>📱 متصفح هاتفي متجاوب</strong> | يعمل على Streamlit Cloud</p>
-    <p>تم تطويره لتقديم أفضل تجربة تصفح على الهاتف</p>
+    <p><strong>💡 نصائح لتجنب الشاشة السوداء:</strong></p>
+    <p>• استخدم مواقع بسيطة مثل example.com أو httpbin.org</p>
+    <p>• تجنب المواقع المعقدة مثل فيسبوك ويوتيوب</p>
+    <p>• إذا استمرت المشكلة، استخدم رابط "فتح في نافذة جديدة"</p>
 </div>
 """, unsafe_allow_html=True)
