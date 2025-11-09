@@ -1,18 +1,19 @@
-
 import streamlit as st
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.core.utils import get_browser_version_from_os
 from webdriver_manager.chrome import ChromeDriverManager
 from webdriver_manager.core.os_manager import ChromeType
 import os
 import json
 import time
+import stat
 
 """
-## Web Scraping على Streamlit Cloud - الحل النهائي
+## Web Scraping على Streamlit Cloud - حل مضمون
 
-تم التحديث للعمل على أحدث إصدار من بيئة Streamlit Cloud باستخدام WebDriverManager.
+تم التحديث للتعامل مع الأخطاء الشائعة في بيئة Streamlit Cloud.
 """
 
 # اسم الملف لحفظ الكوكيز
@@ -21,7 +22,7 @@ os.makedirs(os.path.dirname(COOKIES_FILE), exist_ok=True)
 
 @st.cache_resource
 def get_driver():
-    """تهيئة المتصفح باستخدام WebDriverManager"""
+    """تهيئة المتصفح مع حلول بديلة للأخطاء الشائعة"""
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -42,58 +43,78 @@ def get_driver():
     options.add_argument("--no-service-autorun")
     options.add_argument("--password-store=basic")
     
-    # استخدام Chromium على Streamlit Cloud
-    try:
-        # المحاولة الأولى: استخدام WebDriverManager لتنزيل السائق تلقائيًا
-        service = Service(
-            ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
-        )
-        st.success("✓ تم تحميل السائق تلقائيًا باستخدام WebDriverManager")
-    except Exception as e:
-        st.warning(f"⚠️ فشل تحميل السائق تلقائيًا: {e}")
-        st.info("جاري المحاولة باستخدام المسارات الافتراضية...")
-        
-        # المحاولة الثانية: استخدام المسارات الشائعة في Streamlit Cloud
-        chrome_path = None
-        driver_path = None
-        
-        # التحقق من المسارات المحتملة
-        possible_chrome_paths = [
-            "/usr/bin/chromium-browser",
-            "/usr/bin/chromium",
-            "/usr/bin/google-chrome",
-            "/app/.apt/usr/bin/google-chrome"
-        ]
-        
-        possible_driver_paths = [
-            "/usr/bin/chromedriver",
-            "/usr/local/bin/chromedriver",
-            "/app/.apt/usr/bin/chromedriver"
-        ]
-        
-        for path in possible_chrome_paths:
-            if os.path.exists(path):
-                chrome_path = path
-                break
-        
-        for path in possible_driver_paths:
-            if os.path.exists(path):
-                driver_path = path
-                break
-        
-        if chrome_path and driver_path:
-            options.binary_location = chrome_path
-            service = Service(executable_path=driver_path)
-            st.success(f"✓ تم العثور على Chromium في: {chrome_path}")
-            st.success(f"✓ تم العثور على chromedriver في: {driver_path}")
-        else:
-            # الخيار الأخير: استخدام الإعدادات الافتراضية مع محاولة أفضل
-            st.warning("⚠️ استخدام الإعدادات الافتراضية للمتصفح")
-            options.add_argument("--remote-debugging-port=9222")
+    # تحديد نوع المتصفح يدويًا
+    chrome_type = ChromeType.CHROMIUM
     
-    # إنشاء المتصفح
-    driver = webdriver.Chrome(service=service, options=options)
-    return driver
+    # الحلقة الرئيسية مع حلول بديلة
+    try:
+        # المحاولة الأولى: استخدام WebDriverManager مع إصدار محدد
+        browser_version = get_browser_version_from_os(chrome_type)
+        st.info(f"إصدار المتصفح المكتشف: {browser_version}")
+        
+        # تنزيل السائق المناسب
+        driver_path = ChromeDriverManager(
+            chrome_type=chrome_type,
+            version="114.0.5735.90"  # إصدار معروف بالعمل على Streamlit Cloud
+        ).install()
+        
+        # ضمان أذونات التنفيذ للسائق
+        if os.path.exists(driver_path):
+            current_permissions = os.stat(driver_path).st_mode
+            os.chmod(driver_path, current_permissions | stat.S_IEXEC)
+            st.success(f"✓ تم تعيين أذونات التنفيذ لـ chromedriver: {driver_path}")
+        
+        # إنشاء خدمة السائق
+        service = Service(executable_path=driver_path)
+        driver = webdriver.Chrome(service=service, options=options)
+        st.success("✓ تم تشغيل المتصفح بنجاح باستخدام WebDriverManager")
+        return driver
+        
+    except Exception as e1:
+        st.warning(f"⚠️ المحاولة الأولى فشلت: {str(e1)}")
+        
+        try:
+            # المحاولة الثانية: استخدام المسارات المتوفرة في Streamlit Cloud
+            st.info("جاري المحاولة باستخدام مسار Chromium الافتراضي...")
+            
+            # التحقق من وجود Chromium في المسار الافتراضي
+            chrome_path = "/usr/bin/chromium-browser"
+            driver_path = "/usr/bin/chromedriver"
+            
+            if not os.path.exists(chrome_path):
+                st.warning(f"⚠️ chromium-browser غير موجود في {chrome_path}")
+                # محاولة مسارات بديلة
+                alt_paths = ["/usr/bin/chromium", "/usr/bin/google-chrome"]
+                for path in alt_paths:
+                    if os.path.exists(path):
+                        chrome_path = path
+                        break
+            
+            if not os.path.exists(driver_path):
+                st.warning(f"⚠️ chromedriver غير موجود في {driver_path}")
+                # محاولة مسارات بديلة
+                alt_driver_paths = ["/usr/local/bin/chromedriver", "/app/.apt/usr/bin/chromedriver"]
+                for path in alt_driver_paths:
+                    if os.path.exists(path):
+                        driver_path = path
+                        break
+            
+            # ضمان وجود المسارات
+            if os.path.exists(chrome_path):
+                options.binary_location = chrome_path
+                st.success(f"✓ تم العثور على Chromium في: {chrome_path}")
+            else:
+                st.error("✗ لم يتم العثور على أي إصدار من Chromium")
+            
+            service = Service(executable_path=driver_path)
+            driver = webdriver.Chrome(service=service, options=options)
+            st.success("✓ تم تشغيل المتصفح بنجاح باستخدام المسار الافتراضي")
+            return driver
+            
+        except Exception as e2:
+            st.error(f"✗ فشل جميع المحاولات: {str(e2)}")
+            st.error("الرجاء التواصل مع الدعم أو محاولة حلول بديلة.")
+            raise
 
 def save_cookies_to_file(driver, filename=COOKIES_FILE):
     """تحفظ الكوكيز الحالية من المتصفح إلى ملف محلي."""
@@ -124,13 +145,13 @@ def load_cookies_from_file(driver, base_url, filename=COOKIES_FILE):
         for cookie in cookies:
             try:
                 # إزالة الخصائص التي قد تسبب مشاكل
-                problematic_keys = ['expiry', 'sameSite', 'secure', 'httpOnly']
-                for key in problematic_keys:
+                for key in ['expiry', 'sameSite', 'secure']:
                     cookie.pop(key, None)
                 
-                # ضمان وجود القيم الإلزامية
+                # ضمان وجود domain صالح
                 if 'domain' not in cookie:
-                    cookie['domain'] = base_url.replace('https://', '').replace('http://', '').split('/')[0]
+                    base_domain = base_url.replace('https://', '').replace('http://', '').split('/')[0]
+                    cookie['domain'] = base_domain
                 
                 driver.add_cookie(cookie)
                 success_count += 1
@@ -161,7 +182,7 @@ with col2:
 
 # --- الإعدادات ---
 with st.expander("⚙️ الإعدادات"):
-    site_url = st.text_input("رابط الموقع", "https://example.com", key="site_url")
+    site_url = st.text_input("رابط الموقع", "https://www.google.com", key="site_url")
     
     if st.button("🗑️ مسح الجلسة المحفوظة"):
         try:
