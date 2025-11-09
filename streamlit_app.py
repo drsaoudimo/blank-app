@@ -6,7 +6,6 @@ import time
 import os
 from urllib.parse import urljoin, urlparse
 import re
-import base64
 
 # إعدادات الجلسة
 SESSION_DIR = "/tmp/mobile_browser"
@@ -77,6 +76,7 @@ st.markdown("""
         font-size: 18px;
         cursor: pointer;
         padding: 5px;
+        color: #333;
     }
     
     .url-bar-mobile {
@@ -85,10 +85,13 @@ st.markdown("""
         border: 1px solid #ddd;
         border-radius: 15px;
         padding: 6px 12px;
-        font-size: 14px;
+        font-size: 12px;
         display: flex;
         align-items: center;
         gap: 5px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
     }
     
     .security-icon-mobile {
@@ -98,10 +101,11 @@ st.markdown("""
     
     /* منطقة المحتوى */
     .mobile-content {
-        height: calc(100% - 64px);
+        height: calc(100% - 114px);
         overflow-y: auto;
         background: white;
-        -webkit-overflow-scrolling: touch;
+        padding: 0;
+        margin: 0;
     }
     
     /* شريط الأدوات السفلي */
@@ -127,10 +131,7 @@ st.markdown("""
         padding: 8px;
         border-radius: 8px;
         transition: background 0.2s;
-    }
-    
-    .toolbar-btn:hover {
-        background: #e0e0e0;
+        color: #333;
     }
     
     /* محاكاة محتوى الجوال */
@@ -138,39 +139,17 @@ st.markdown("""
         width: 100%;
         min-height: 100%;
         background: white;
+        padding: 15px;
+        box-sizing: border-box;
     }
     
     .mobile-header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 60px 20px 20px;
+        padding: 40px 20px 20px;
         text-align: center;
-    }
-    
-    .mobile-nav {
-        background: #f8f9fa;
-        padding: 15px;
-        border-bottom: 1px solid #e0e0e0;
-    }
-    
-    .mobile-nav-links {
-        display: flex;
-        gap: 15px;
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        overflow-x: auto;
-    }
-    
-    .mobile-nav-links a {
-        color: #495057;
-        text-decoration: none;
-        font-weight: 500;
-        white-space: nowrap;
-    }
-    
-    .mobile-content-area {
-        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
     }
     
     .mobile-card {
@@ -194,77 +173,37 @@ st.markdown("""
         margin: 5px 0;
     }
     
-    .mobile-input {
-        padding: 12px;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        width: 100%;
-        margin: 5px 0;
-        font-size: 16px;
-    }
-    
     .mobile-footer {
         background: #343a40;
         color: white;
         padding: 20px;
         text-align: center;
+        border-radius: 10px;
         margin-top: 20px;
     }
     
+    /* تحسين النص للجوال */
+    .mobile-text {
+        font-size: 16px;
+        line-height: 1.6;
+        color: #333;
+    }
+    
+    .mobile-link {
+        color: #007bff;
+        text-decoration: none;
+        display: block;
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+    }
+    
     /* تأثيرات التحميل */
-    .loading-spinner {
-        display: inline-block;
-        width: 20px;
-        height: 20px;
-        border: 3px solid #f3f3f3;
-        border-top: 3px solid #007bff;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-    
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    
-    /* التمرير على الجوال */
-    .mobile-content::-webkit-scrollbar {
-        width: 3px;
-    }
-    
-    .mobile-content::-webkit-scrollbar-thumb {
-        background: #ccc;
-        border-radius: 10px;
-    }
-    
-    /* علامات التبويب على الجوال */
-    .mobile-tabs {
+    .loading {
         display: flex;
-        background: #f8f9fa;
-        border-bottom: 1px solid #e0e0e0;
-        overflow-x: auto;
-    }
-    
-    .mobile-tab {
-        padding: 12px 16px;
-        background: #e9ecef;
-        border-right: 1px solid #dee2e6;
-        cursor: pointer;
-        min-width: 120px;
-        display: flex;
+        justify-content: center;
         align-items: center;
-        gap: 8px;
-        font-size: 14px;
-    }
-    
-    .mobile-tab.active {
-        background: white;
-        border-bottom: 2px solid #007bff;
-    }
-    
-    .tab-close-mobile {
-        margin-left: auto;
-        font-size: 12px;
+        height: 100px;
+        color: #666;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -272,18 +211,15 @@ st.markdown("""
 class MobileBrowserSimulator:
     def __init__(self):
         self.session = requests.Session()
-        # User Agent لمحاكاة الهاتف
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
-            'Accept-Encoding': 'gzip, deflate, br',
         })
         self.current_url = ""
         self.tabs = [{"id": 1, "title": "علامة تبويب جديدة", "url": "", "favicon": "🌐", "content": ""}]
         self.active_tab = 1
         self.history = []
-        self.viewport_width = 375  # عرض شاشة iPhone SE
         
     def navigate(self, url, tab_id=None):
         """التنقل إلى رابط في علامة تبويب محددة"""
@@ -359,72 +295,65 @@ class MobileBrowserSimulator:
                 <h2>تعذر العثور على هذا الموقع</h2>
                 <p>لا يمكن الوصول إلى {url}</p>
             </div>
-            <div class="mobile-content-area">
-                <div class="mobile-card">
-                    <h3>تفاصيل الخطأ:</h3>
-                    <p>{error}</p>
-                </div>
-                <div class="mobile-card">
-                    <h4>جرب ما يلي:</h4>
-                    <ul>
-                        <li>تحقق من اتصال الشبكة</li>
-                        <li>تحقق من كتابة العنوان</li>
-                        <li>جرب استخدام HTTPS بدلاً من HTTP</li>
-                    </ul>
-                    <button class="mobile-button" onclick="window.location.reload()">إعادة المحاولة</button>
-                </div>
+            <div class="mobile-card">
+                <h3>تفاصيل الخطأ:</h3>
+                <p class="mobile-text">{error}</p>
+            </div>
+            <div class="mobile-card">
+                <h3>جرب ما يلي:</h3>
+                <ul class="mobile-text">
+                    <li>تحقق من اتصال الشبكة</li>
+                    <li>تحقق من كتابة العنوان</li>
+                    <li>جرب استخدام HTTPS بدلاً من HTTP</li>
+                </ul>
             </div>
         </div>
         """
     
-    def add_tab(self, url=""):
-        """إضافة علامة تبويب جديدة"""
-        new_tab_id = max([tab['id'] for tab in self.tabs]) + 1 if self.tabs else 1
-        self.tabs.append({
-            "id": new_tab_id,
-            "title": "علامة تبويب جديدة",
-            "url": url,
-            "favicon": "🌐",
-            "content": ""
-        })
-        self.active_tab = new_tab_id
-        return new_tab_id
-    
-    def close_tab(self, tab_id):
-        """إغلاق علامة تبويب"""
-        if len(self.tabs) > 1:
-            self.tabs = [tab for tab in self.tabs if tab['id'] != tab_id]
-            if self.active_tab == tab_id:
-                self.active_tab = self.tabs[0]['id']
-    
-    def get_active_tab(self):
-        """الحصول على علامة التبويب النشطة"""
-        for tab in self.tabs:
-            if tab['id'] == self.active_tab:
-                return tab
-        return self.tabs[0] if self.tabs else None
-    
-    def convert_to_mobile_view(self, html_content, base_url):
-        """تحويل محتوى HTML لعرضه على الجوال"""
+    def process_content_for_mobile(self, html_content, base_url):
+        """معالجة المحتوى لعرضه على الجوال"""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             
-            # إضافة viewport meta tag لمحاكاة الجوال
-            viewport_tag = soup.new_tag('meta', attrs={'name': 'viewport', 'content': 'width=device-width, initial-scale=1.0'})
-            if soup.head:
-                soup.head.append(viewport_tag)
+            # إزالة العناصر غير المرغوب فيها
+            for element in soup(["script", "style", "iframe", "nav", "header", "footer"]):
+                element.decompose()
             
-            # تحسين النماذج والعناصر للجوال
-            for input_elem in soup.find_all(['input', 'textarea', 'select']):
-                input_elem['style'] = 'font-size: 16px;'  # منع التكبير في iOS
+            # تحسين الصور
+            for img in soup.find_all('img'):
+                img['style'] = 'max-width: 100%; height: auto; border-radius: 8px;'
+                if not img.get('alt'):
+                    img['alt'] = 'صورة'
             
-            # تحسين الروابط والعناصر للجوال
+            # تحسين الروابط
             for link in soup.find_all('a'):
-                link['style'] = 'min-height: 44px; display: inline-block; padding: 12px;'
+                link['style'] = 'color: #007bff; text-decoration: none; display: block; padding: 10px; border-bottom: 1px solid #eee;'
+                link['class'] = 'mobile-link'
             
-            return str(soup)
+            # تحسين النصوص
+            for text_element in soup.find_all(['p', 'span', 'div']):
+                if text_element.get_text(strip=True):
+                    text_element['style'] = 'font-size: 16px; line-height: 1.6; color: #333; margin: 10px 0;'
+            
+            # تحسين العناوين
+            for heading in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+                heading['style'] = 'color: #333; margin: 15px 0 10px 0;'
+            
+            return f"""
+            <div class="mobile-website">
+                {str(soup)}
+            </div>
+            """
         except Exception as e:
-            return html_content
+            return f"""
+            <div class="mobile-website">
+                <div class="mobile-card">
+                    <h3>محتوى الصفحة:</h3>
+                    <p class="mobile-text">تم تحميل الصفحة ولكن هناك مشكلة في التنسيق.</p>
+                    <p class="mobile-text">الخطأ: {str(e)}</p>
+                </div>
+            </div>
+            """
 
 # تهيئة المتصفح في حالة الجلسة
 if 'mobile_browser' not in st.session_state:
@@ -433,13 +362,14 @@ if 'mobile_browser' not in st.session_state:
 # العنوان الرئيسي
 st.title("📱 متصفح محاكي للهواتف")
 
-# شريط التحكم
+# شريط التحكم العلوي
 col1, col2, col3 = st.columns([1, 2, 1])
 with col1:
-    if st.button("🔄", help="إعادة تحميل"):
+    if st.button("🔄", help="إعادة تحميل", use_container_width=True):
         active_tab = st.session_state.mobile_browser.get_active_tab()
         if active_tab and active_tab['url']:
             st.session_state.mobile_browser.navigate(active_tab['url'])
+            st.rerun()
 
 with col2:
     current_url = st.session_state.mobile_browser.get_active_tab()['url'] if st.session_state.mobile_browser.get_active_tab() else ""
@@ -452,168 +382,47 @@ with col2:
     
     if new_url and new_url != current_url:
         st.session_state.mobile_browser.navigate(new_url)
+        st.rerun()
 
 with col3:
-    if st.button("➕", help="علامة تبويب جديدة"):
+    if st.button("➕", help="علامة تبويب جديدة", use_container_width=True):
         st.session_state.mobile_browser.add_tab()
         st.rerun()
 
 # عرض علامات التبويب
-if st.session_state.mobile_browser.tabs:
-    st.markdown("### علامات التبويب المفتوحة:")
-    cols = st.columns(len(st.session_state.mobile_browser.tabs))
+if len(st.session_state.mobile_browser.tabs) > 0:
+    st.write("**علامات التبويب المفتوحة:**")
+    tab_cols = st.columns(len(st.session_state.mobile_browser.tabs) + 1)
+    
     for idx, tab in enumerate(st.session_state.mobile_browser.tabs):
-        with cols[idx]:
-            tab_label = f"{tab['favicon']} {tab['title'][:12]}..."
-            is_active = "🟢" if tab['id'] == st.session_state.mobile_browser.active_tab else "⚪"
+        with tab_cols[idx]:
+            tab_label = f"{tab['favicon']} {tab['title'][:10]}..."
+            is_active = tab['id'] == st.session_state.mobile_browser.active_tab
             
-            if st.button(f"{is_active} {tab_label}", key=f"mobile_tab_{tab['id']}", use_container_width=True):
+            if st.button(tab_label, key=f"tab_{tab['id']}", use_container_width=True, 
+                        type="primary" if is_active else "secondary"):
                 st.session_state.mobile_browser.active_tab = tab['id']
                 st.rerun()
+
+    with tab_cols[-1]:
+        if st.button("✕", help="إغلاق الجميع", use_container_width=True):
+            # الاحتفاظ بعلامة تبويب واحدة فقط
+            st.session_state.mobile_browser.tabs = [st.session_state.mobile_browser.tabs[0]]
+            st.session_state.mobile_browser.active_tab = st.session_state.mobile_browser.tabs[0]['id']
+            st.rerun()
 
 # متصفح الهاتف المحاكي
 st.markdown("### 📱 شاشة الهاتف:")
 
-# حاوية متصفح الهاتف
-st.markdown("""
-<div class="mobile-browser-container">
-    <div class="mobile-screen">
-        <div class="status-bar">
-            <div class="status-time" id="currentTime">14:30</div>
-            <div class="status-icons">
-                <span>📶</span>
-                <span>📡</span>
-                <span>🔋</span>
-            </div>
-        </div>
-        
-        <div class="mobile-nav-bar">
-            <button class="nav-btn" onclick="handleBack()">←</button>
-            <button class="nav-btn" onclick="handleForward()">→</button>
-            <div class="url-bar-mobile">
-                <span class="security-icon-mobile">🔒</span>
-                <span id="mobileUrl">{current_url_display}</span>
-            </div>
-            <button class="nav-btn" onclick="handleReload()">↻</button>
-        </div>
-        
-        <div class="mobile-content" id="mobileContent">
-            {mobile_content}
-        </div>
-        
-        <div class="mobile-toolbar">
-            <button class="toolbar-btn" onclick="handleHome()">🏠</button>
-            <button class="toolbar-btn" onclick="handleBack()">◀</button>
-            <button class="toolbar-btn" onclick="handleForward()">▶</button>
-            <button class="toolbar-btn" onclick="handleTabs()">📑</button>
-            <button class="toolbar-btn" onclick="handleMenu()">⋯</button>
-        </div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-# JavaScript لتحديث الوقت ومحاكاة الأحداث
-st.markdown("""
-<script>
-// تحديث الوقت
-function updateTime() {
-    const now = new Date();
-    const timeString = now.getHours().toString().padStart(2, '0') + ':' + 
-                      now.getMinutes().toString().padStart(2, '0');
-    document.getElementById('currentTime').textContent = timeString;
-}
-
-// تحديث الوقت كل دقيقة
-setInterval(updateTime, 60000);
-updateTime();
-
-// محاكاة أحداث المتصفح
-function handleBack() {
-    alert('زر الرجوع - تحت التطوير');
-}
-
-function handleForward() {
-    alert('زر التقدم - تحت التطوير');
-}
-
-function handleReload() {
-    window.location.reload();
-}
-
-function handleHome() {
-    window.location.href = window.location.pathname;
-}
-
-function handleTabs() {
-    alert('إدارة العلامات - تحت التطوير');
-}
-
-function handleMenu() {
-    alert('القائمة - تحت التطوير');
-}
-
-// محاكاة التمرير السلس للجوال
-document.addEventListener('touchstart', function(e) {
-    // إضافة تأثيرات اللمس
-});
-
-// تحديث رابط الجوال
-function updateMobileUrl(url) {
-    const urlElement = document.getElementById('mobileUrl');
-    if (urlElement && url) {
-        // تقصير الرابط لعرضه بشكل أفضل
-        const shortUrl = url.length > 25 ? url.substring(0, 25) + '...' : url;
-        urlElement.textContent = shortUrl;
-    }
-}
-
-// تحديث المحتوى
-function updateMobileContent(content) {
-    const contentElement = document.getElementById('mobileContent');
-    if (contentElement) {
-        contentElement.innerHTML = content;
-    }
-}
-</script>
-""", unsafe_allow_html=True)
-
-# تحديث محتوى المتصفح
+# الحصول على المحتوى الحالي
 active_tab = st.session_state.mobile_browser.get_active_tab()
 current_url_display = active_tab['url'] if active_tab and active_tab['url'] else "about:blank"
+short_url = current_url_display[:30] + "..." if len(current_url_display) > 30 else current_url_display
 
 if active_tab and active_tab['content']:
-    # معالجة المحتوى لعرضه على الجوال
-    mobile_content = st.session_state.mobile_browser.convert_to_mobile_view(active_tab['content'], active_tab['url'])
-    
-    # استخراج وعرض المحتوى بطريقة مناسبة للجوال
-    try:
-        soup = BeautifulSoup(mobile_content, 'html.parser')
-        
-        # إزالة scripts وstyles معقدة
-        for script in soup(["script", "style", "iframe"]):
-            script.decompose()
-        
-        # تحسين الصور للجوال
-        for img in soup.find_all('img'):
-            img['style'] = 'max-width: 100%; height: auto;'
-        
-        # تحسين الجداول للجوال
-        for table in soup.find_all('table'):
-            table['style'] = 'width: 100%; overflow-x: auto; display: block;'
-        
-        mobile_content = str(soup)
-        
-    except Exception as e:
-        mobile_content = f"""
-        <div class="mobile-website">
-            <div class="mobile-content-area">
-                <div class="mobile-card">
-                    <h3>محتوى الصفحة:</h3>
-                    <p>تم تحميل الصفحة بنجاح ولكن قد يكون هناك بعض مشاكل التنسيق.</p>
-                </div>
-            </div>
-        </div>
-        """
+    mobile_content = st.session_state.mobile_browser.process_content_for_mobile(
+        active_tab['content'], active_tab['url']
+    )
 else:
     # الصفحة الافتراضية للجوال
     mobile_content = """
@@ -624,51 +433,91 @@ else:
             <p>أدخل عنوان URL لبدء التصفح</p>
         </div>
         
-        <div class="mobile-content-area">
-            <div class="mobile-card">
-                <h3>مواقع مقترحة:</h3>
-                <button class="mobile-button" onclick="window.location.href='?url=google.com'">Google</button>
-                <button class="mobile-button" onclick="window.location.href='?url=wikipedia.org'">Wikipedia</button>
-                <button class="mobile-button" onclick="window.location.href='?url=github.com'">GitHub</button>
-            </div>
-            
-            <div class="mobile-card">
-                <h3>مميزات المتصفح:</h3>
-                <ul>
-                    <li>تصميم متجاوب للجوال</li>
-                    <li>محرك تصفح حقيقي</li>
-                    <li>علامات تبويب متعددة</li>
-                    <li>سجل التصفح</li>
-                </ul>
+        <div class="mobile-card">
+            <h3>مواقع مقترحة:</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <a href="#" onclick="window.location.href='?url=google.com'" class="mobile-link">Google</a>
+                <a href="#" onclick="window.location.href='?url=wikipedia.org'" class="mobile-link">Wikipedia</a>
+                <a href="#" onclick="window.location.href='?url=github.com'" class="mobile-link">GitHub</a>
+                <a href="#" onclick="window.location.href='?url=stackoverflow.com'" class="mobile-link">Stack Overflow</a>
             </div>
         </div>
         
+        <div class="mobile-card">
+            <h3>مميزات المتصفح:</h3>
+            <ul class="mobile-text">
+                <li>تصميم متجاوب للجوال</li>
+                <li>محرك تصفح حقيقي</li>
+                <li>علامات تبويب متعددة</li>
+                <li>سجل التصفح</li>
+            </ul>
+        </div>
+        
         <div class="mobile-footer">
-            <p>المتصفح المحاكي للجوال v1.0</p>
+            <p>المتصفح المحاكي للجوال v2.0</p>
         </div>
     </div>
     """
 
-# تحديث JavaScript بالمحتوى الفعلي
-st.markdown(f"""
-<script>
-updateMobileUrl("{current_url_display}");
-updateMobileContent(`{mobile_content}`);
-</script>
-""", unsafe_allow_html=True)
+# بناء واجهة الهاتف كاملة
+mobile_html = f"""
+<div class="mobile-browser-container">
+    <div class="mobile-screen">
+        <div class="status-bar">
+            <div class="status-time" id="currentTime">{time.strftime('%H:%M')}</div>
+            <div class="status-icons">
+                <span>📶</span>
+                <span>📡</span>
+                <span>🔋</span>
+            </div>
+        </div>
+        
+        <div class="mobile-nav-bar">
+            <button class="nav-btn" onclick="window.location.reload()">←</button>
+            <button class="nav-btn" onclick="window.location.reload()">→</button>
+            <div class="url-bar-mobile">
+                <span class="security-icon-mobile">🔒</span>
+                <span>{short_url}</span>
+            </div>
+            <button class="nav-btn" onclick="window.location.reload()">↻</button>
+        </div>
+        
+        <div class="mobile-content">
+            {mobile_content}
+        </div>
+        
+        <div class="mobile-toolbar">
+            <button class="toolbar-btn" onclick="window.location.href='?'">🏠</button>
+            <button class="toolbar-btn" onclick="window.location.reload()">◀</button>
+            <button class="toolbar-btn" onclick="window.location.reload()">▶</button>
+            <button class="toolbar-btn" onclick="alert('إدارة العلامات')">📑</button>
+            <button class="toolbar-btn" onclick="alert('القائمة')">⋯</button>
+        </div>
+    </div>
+</div>
+"""
+
+# عرض متصفح الهاتف باستخدام st.components.v1.html
+st.components.v1.html(mobile_html, height=700)
 
 # لوحة التحكم الجانبية
 with st.sidebar:
     st.header("🎮 تحكم الجوال")
     
     st.subheader("إعدادات الشاشة")
-    screen_size = st.selectbox("حجم الشاشة:", ["iPhone SE (375x667)", "iPhone 12 (390x844)", "Samsung Galaxy (412x915)"])
+    screen_size = st.selectbox("حجم الشاشة:", 
+                              ["iPhone SE (375x667)", "iPhone 12 (390x844)", "Samsung Galaxy (412x915)"])
     
     st.subheader("إدارة العلامات")
     for tab in st.session_state.mobile_browser.tabs:
-        if st.button(f"إغلاق {tab['title'][:15]}...", key=f"close_{tab['id']}"):
-            st.session_state.mobile_browser.close_tab(tab['id'])
-            st.rerun()
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.write(f"{tab['favicon']} {tab['title'][:15]}")
+        with col2:
+            if st.button("✕", key=f"close_{tab['id']}"):
+                if len(st.session_state.mobile_browser.tabs) > 1:
+                    st.session_state.mobile_browser.close_tab(tab['id'])
+                    st.rerun()
     
     st.subheader("سجل التصفح")
     if st.session_state.mobile_browser.history:
@@ -680,11 +529,11 @@ with st.sidebar:
         st.info("لا يوجد سجل تصفح")
     
     st.subheader("أدوات المطور")
-    if st.button("مسح الذاكرة المؤقتة"):
+    if st.button("🧹 مسح الذاكرة المؤقتة"):
         st.session_state.mobile_browser.session.cookies.clear()
         st.success("تم مسح الذاكرة المؤقتة")
     
-    if st.button("إعادة تعيين المتصفح"):
+    if st.button("🔄 إعادة تعيين المتصفح"):
         st.session_state.mobile_browser = MobileBrowserSimulator()
         st.success("تم إعادة التعيين")
         st.rerun()
@@ -701,7 +550,7 @@ with st.expander("📊 إحصائيات المتصفح"):
     
     with col3:
         if active_tab:
-            st.metric("الصفحة النشطة", active_tab['title'][:12] + "...")
+            st.metric("الصفحة النشطة", active_tab['title'][:10] + "...")
 
 # تذييل الصفحة
 st.markdown("---")
