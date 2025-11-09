@@ -991,24 +991,38 @@ links_panel_html = ""
 if active_tab and active_tab.get('links') and st.session_state.show_links_panel:
     links = active_tab['links']
     analysis = active_tab.get('links_analysis', {})
-    
+
+    # بناء HTML بشكل آمن وواضح
+    link_items = "".join(
+        f"""
+        <div class="link-item link-{link['type']}" 
+             onclick="window.parent.postMessage({{type: 'BROWSER_NAVIGATE', url: '{link['url']}'}}, '*')">
+            <span class="link-icon">{link['icon']}</span>
+            <div class="link-text">
+                {link['text']}
+                <div class="link-url">{link['domain']}</div>
+            </div>
+        </div>
+        """
+        for link in links[:50]
+    )
+
+    extra_notice = ""
+    if len(links) > 50:
+        extra_notice = f"""
+        <div style="text-align:center; color:#666; font-size:12px; padding:10px;">
+            ... وعرض {len(links) - 50} روابط إضافية
+        </div>
+        """
+
     links_panel_html = f"""
-    <div class="links-panel">
+    <div class="links-panel" style="direction: rtl; font-family: system-ui;">
         <div class="links-header">
             <strong>🔗 روابط الصفحة ({analysis.get('total_links', 0)})</strong>
         </div>
         <div class="links-list">
-            {"".join([f'''
-            <div class="link-item link-{link['type']}" 
-                 onclick="window.parent.postMessage({{type: 'BROWSER_NAVIGATE', url: '{link['url']}'}}, '*')">
-                <span class="link-icon">{link['icon']}</span>
-                <div class="link-text">
-                    {link['text']}
-                    <div class="link-url">{link['domain']}</div>
-                </div>
-            </div>
-            ''' for link in links[:50]])}  {/* عرض أول 50 رابط فقط */}
-            {f'<div style="text-align: center; color: #666; font-size: 12px; padding: 10px;">... وعرض {len(links) - 50} روابط إضافية</div>' if len(links) > 50 else ''}
+            {link_items}
+            {extra_notice}
         </div>
     </div>
     """
