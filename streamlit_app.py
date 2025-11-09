@@ -2,546 +2,954 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import time
+import os
+from urllib.parse import urljoin, urlparse
 import json
-from urllib.parse import urlparse, urljoin
 import re
 
-"""
-## 📱 متصفح هاتفي يعمل بـ requests
+# إعدادات الجلسة
+SESSION_DIR = "/tmp/desktop_browser"
+os.makedirs(SESSION_DIR, exist_ok=True)
 
-متصفح موثوق يستخدم مكتبة requests لجلب المحتوى، يعمل على جميع بيئات Streamlit Cloud بدون مشاكل.
-"""
-
-# CSS للواجهة الهواتف
+# تثبيت CSS لمتصفح ديسكتوب عالي الجودة
 st.markdown("""
 <style>
-.mobile-container {
-    width: 100%;
-    max-width: 414px;
-    margin: 20px auto;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-.mobile-browser {
-    border-radius: 35px;
-    overflow: hidden;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    background: #000;
-    position: relative;
-    width: 100%;
-    aspect-ratio: 9/19;
-    margin: 0 auto;
-}
-
-.status-bar {
-    background: #000;
-    color: white;
-    padding: 8px 15px;
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    height: 25px;
-}
-
-.browser-chrome {
-    height: calc(100% - 25px);
-    background: white;
-    display: flex;
-    flex-direction: column;
-}
-
-.nav-bar {
-    display: flex;
-    padding: 8px 15px;
-    background: #f8f8f8;
-    border-bottom: 1px solid #ddd;
-    gap: 10px;
-}
-
-.nav-btn {
-    background: #e0e0e0;
-    border: none;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.url-display {
-    flex: 1;
-    background: white;
-    border: 1px solid #ddd;
-    border-radius: 20px;
-    padding: 5px 12px;
-    font-size: 12px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.browser-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 15px;
-    background: #f9f9f9;
-}
-
-.loading-indicator {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    flex-direction: column;
-    padding: 20px;
-}
-
-.spinner {
-    border: 4px solid rgba(0, 0, 0, 0.1);
-    border-radius: 50%;
-    border-top: 4px solid #007bff;
-    width: 30px;
-    height: 30px;
-    animation: spin 1s linear infinite;
-    margin-bottom: 15px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-/* عناصر HTML للموبايل */
-.mobile-h1, .mobile-h2, .mobile-h3 {
-    color: #333;
-    margin: 15px 0 10px 0;
-}
-
-.mobile-h1 { font-size: 22px; }
-.mobile-h2 { font-size: 18px; }
-.mobile-h3 { font-size: 16px; }
-
-.mobile-p, .mobile-text {
-    font-size: 15px;
-    line-height: 1.6;
-    margin: 10px 0;
-    color: #444;
-}
-
-.mobile-img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-    margin: 10px 0;
-}
-
-.mobile-link {
-    color: #007bff;
-    text-decoration: none;
-    display: block;
-    padding: 8px 0;
-    border-bottom: 1px solid #eee;
-}
-
-.mobile-link:hover {
-    background: #f5f5f5;
-}
-
-.error-message {
-    padding: 30px 20px;
-    text-align: center;
-    color: #dc3545;
-}
-
-.quick-tabs {
-    display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    padding: 10px 0;
-    margin: 15px 0;
-}
-
-.tab-btn {
-    min-width: 80px;
-    padding: 8px 12px;
-    border-radius: 15px;
-    background: #f0f0f0;
-    border: 1px solid #ddd;
-    text-align: center;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.tab-btn:hover, .tab-btn.active {
-    background: #007bff;
-    color: white;
-    border-color: #007bff;
-}
+    /* إعادة ضبط عام */
+    .main {
+        padding: 0 !important;
+    }
+    
+    /* متصفح الديسكتوب */
+    .desktop-browser {
+        width: 100%;
+        height: 75vh;
+        border: 1px solid #c0c0c0;
+        border-radius: 8px;
+        background: white;
+        margin: 10px 0;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        position: relative;
+        overflow: hidden;
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    
+    /* شريط العنوان */
+    .title-bar {
+        background: linear-gradient(180deg, #ebebeb 0%, #d5d5d5 100%);
+        border-bottom: 1px solid #b0b0b0;
+        padding: 4px 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 30px;
+        user-select: none;
+    }
+    
+    .window-controls {
+        display: flex;
+        gap: 6px;
+    }
+    
+    .control-btn {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .close-btn { background: #ff5f57; }
+    .minimize-btn { background: #ffbd2e; }
+    .maximize-btn { background: #28ca42; }
+    
+    .window-title {
+        flex: 1;
+        text-align: center;
+        font-size: 12px;
+        color: #444;
+        font-weight: 500;
+    }
+    
+    /* شريط الأدوات */
+    .toolbar {
+        background: #f0f0f0;
+        border-bottom: 1px solid #d0d0d0;
+        padding: 6px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 40px;
+    }
+    
+    .toolbar-btn {
+        background: #ffffff;
+        border: 1px solid #c0c0c0;
+        border-radius: 3px;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.2s;
+    }
+    
+    .toolbar-btn:hover {
+        background: #f8f8f8;
+        border-color: #a0a0a0;
+    }
+    
+    .toolbar-btn:active {
+        background: #e8e8e8;
+    }
+    
+    .url-container {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .url-bar {
+        flex: 1;
+        background: white;
+        border: 1px solid #c0c0c0;
+        border-radius: 15px;
+        padding: 6px 12px;
+        font-size: 13px;
+        outline: none;
+    }
+    
+    .url-bar:focus {
+        border-color: #0078d4;
+        box-shadow: 0 0 0 1px #0078d4;
+    }
+    
+    .security-badge {
+        background: #107c10;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 500;
+    }
+    
+    /* علامات التبويب */
+    .tab-container {
+        background: #f8f8f8;
+        border-bottom: 1px solid #d0d0d0;
+        display: flex;
+        padding: 0 8px;
+        overflow-x: auto;
+    }
+    
+    .browser-tab {
+        background: #e8e8e8;
+        padding: 8px 16px;
+        border: 1px solid #c0c0c0;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+        margin-right: 2px;
+        cursor: pointer;
+        min-width: 160px;
+        max-width: 240px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        transition: all 0.2s;
+    }
+    
+    .browser-tab.active {
+        background: white;
+        border-color: #c0c0c0;
+        border-bottom: 1px solid white;
+        margin-bottom: -1px;
+    }
+    
+    .tab-favicon {
+        width: 14px;
+        height: 14px;
+        border-radius: 2px;
+    }
+    
+    .tab-title {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 500;
+    }
+    
+    .tab-close {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #888;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        cursor: pointer;
+        opacity: 0.7;
+    }
+    
+    .tab-close:hover {
+        opacity: 1;
+    }
+    
+    .new-tab-btn {
+        background: transparent;
+        border: none;
+        padding: 8px 12px;
+        font-size: 16px;
+        cursor: pointer;
+        color: #666;
+    }
+    
+    /* منطقة المحتوى */
+    .content-area {
+        height: calc(100% - 110px);
+        background: white;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .browser-content {
+        width: 100%;
+        height: 100%;
+        border: none;
+        background: white;
+    }
+    
+    /* شريط الحالة */
+    .status-bar {
+        background: #0078d4;
+        color: white;
+        padding: 3px 10px;
+        font-size: 11px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    /* تحسينات للمحتوى */
+    .website-content {
+        width: 100%;
+        min-height: 100%;
+        padding: 20px;
+        background: white;
+        box-sizing: border-box;
+    }
+    
+    .content-frame {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+    
+    /* التحميل والرسائل */
+    .loading-indicator {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        flex-direction: column;
+        gap: 15px;
+        background: white;
+    }
+    
+    .spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #0078d4;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .error-message {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #dc2626;
+        padding: 20px;
+        border-radius: 6px;
+        text-align: center;
+        margin: 20px;
+    }
+    
+    .success-message {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        color: #16a34a;
+        padding: 15px;
+        border-radius: 6px;
+        margin: 10px;
+    }
+    
+    /* شريط التقدم */
+    .progress-bar {
+        height: 3px;
+        background: linear-gradient(90deg, #0078d4, #00b294);
+        width: 0%;
+        transition: width 0.3s ease;
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+    }
+    
+    /* تحسينات للاستجابة */
+    @media (max-width: 1200px) {
+        .desktop-browser {
+            height: 70vh;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .desktop-browser {
+            height: 65vh;
+        }
+        
+        .toolbar {
+            padding: 4px 8px;
+            height: 36px;
+        }
+        
+        .toolbar-btn {
+            padding: 4px 8px;
+            font-size: 11px;
+        }
+        
+        .browser-tab {
+            min-width: 120px;
+            padding: 6px 12px;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# تهيئة حالة الجلسة
-if 'current_url' not in st.session_state:
-    st.session_state.current_url = 'https://example.com'
-if 'history' not in st.session_state:
-    st.session_state.history = [{'url': 'https://example.com', 'title': 'صفحة البداية'}]
-if 'back_enabled' not in st.session_state:
-    st.session_state.back_enabled = False
-if 'forward_enabled' not in st.session_state:
-    st.session_state.forward_enabled = False
-if 'page_content' not in st.session_state:
-    st.session_state.page_content = ''
-if 'page_title' not in st.session_state:
-    st.session_state.page_title = 'صفحة البداية'
-if 'loading' not in st.session_state:
-    st.session_state.loading = False
-if 'error_message' not in st.session_state:
-    st.session_state.error_message = ''
-
-# مصادر متوافقة تعمل مع requests
-COMPATIBLE_SITES = [
-    {"name": "Example", "url": "https://example.com", "icon": "⭐"},
-    {"name": "Wikipedia", "url": "https://en.wikipedia.org", "icon": "📚"},
-    {"name": "BBC", "url": "https://www.bbc.com", "icon": "🌍"},
-    {"name": "GitHub", "url": "https://github.com", "icon": "💻"},
-    {"name": "Python", "url": "https://www.python.org", "icon": "🐍"},
-]
-
-# دالة لجلب المحتوى باستخدام requests
-def fetch_page_content(url):
-    """جلب محتوى الصفحة باستخدام requests"""
-    st.session_state.loading = True
-    st.session_state.error_message = ''
-    
-    try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1'
-        }
+class ProfessionalDesktopBrowser:
+    def __init__(self):
+        self.session = requests.Session()
+        # User Agent حديث لمتصفح الديسكتوب
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        })
+        self.tabs = [{
+            "id": 1, 
+            "title": "علامة تبويب جديدة", 
+            "url": "", 
+            "favicon": "🌐", 
+            "content": "", 
+            "status": "active",
+            "loading": False
+        }]
+        self.active_tab = 1
+        self.history = []
+        self.future = []
+        self.loading_progress = 0
         
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        # معالجة المحتوى
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # استخراج العنوان
-        title = soup.title.string if soup.title else urlparse(url).netloc
-        
-        # تنظيف المحتوى وإعداده للعرض
-        content = process_page_content(soup, url)
-        
-        return {
-            'title': title,
-            'content': content,
-            'status': 'success'
-        }
-        
-    except Exception as e:
-        error_msg = f"خطأ في تحميل الصفحة: {str(e)}"
-        if "403" in str(e):
-            error_msg = "الموقع يرفض الطلبات التلقائية. جرب موقعًا آخر."
-        elif "404" in str(e):
-            error_msg = "الصفحة غير موجودة."
-        elif "timeout" in str(e).lower():
-            error_msg = "انتهت مهلة الاتصال بالموقع."
+    def navigate_to(self, url, tab_id=None):
+        """التنقل إلى رابط جديد مع ضمان الجودة"""
+        if not url or url.strip() == "":
+            return False, "الرابط فارغ"
             
-        return {
-            'title': 'خطأ في التحميل',
-            'content': f"""
-            <div class="error-message">
-                <h3>⚠️ {error_msg}</h3>
-                <p>جرب أحد هذه الحلول:</p>
-                <ul>
-                    <li>تحقق من كتابة العنوان</li>
-                    <li>جرب موقعًا آخر من المواقع المقترحة</li>
-                    <li>انتظر قليلًا ثم أعد المحاولة</li>
-                </ul>
-                <p style="margin-top: 20px; font-weight: bold;">مواقع تعمل بشكل جيد:</p>
-                <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 15px;">
-                    {''.join([f'<button onclick="navigateTo(\'{site["url"]}\')" style="padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">{site["name"]}</button>' for site in COMPATIBLE_SITES[:3]])}
-                </div>
-            </div>
-            """,
-            'status': 'error',
-            'error': error_msg
-        }
-    finally:
-        st.session_state.loading = False
-
-def process_page_content(soup, base_url):
-    """معالجة المحتوى لجعله مناسبًا للهاتف"""
-    # إزالة العناصر غير المرغوب فيها
-    for element in soup(["script", "style", "nav", "header", "footer", "aside", "iframe", "form"]):
-        element.decompose()
-    
-    # إزالة السمات غير الضرورية
-    for tag in soup.find_all(True):
-        tag.attrs = {}
-    
-    # تحسين الروابط
-    for a in soup.find_all('a'):
-        if a.get('href'):
-            # جعل الروابط نسبية
-            full_url = urljoin(base_url, a['href'])
-            a['href'] = '#'
-            a['onclick'] = f"navigateTo('{full_url}')"
-            a['class'] = 'mobile-link'
-            a['style'] = 'color: #007bff; text-decoration: none; display: block; padding: 8px 0; border-bottom: 1px solid #eee;'
-    
-    # تحسين الصور
-    for img in soup.find_all('img'):
-        if not img.get('alt'):
-            img['alt'] = 'صورة'
-        img['class'] = 'mobile-img'
-        img['style'] = 'max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0;'
-        # إزالة الصور الكبيرة جدًا
-        if 'src' in img.attrs and 'logo' not in img['src'].lower() and 'icon' not in img['src'].lower():
-            img['src'] = ''
-            img.string = '🖼️ صورة'
-    
-    # تحسين العناوين
-    for i, tag_name in enumerate(['h1', 'h2', 'h3']):
-        for tag in soup.find_all(tag_name):
-            tag['class'] = f'mobile-{tag_name}'
-            tag['style'] = f'color: #333; margin: 15px 0 10px 0; font-size: {22-i*4}px;'
-    
-    # تحسين الفقرات
-    for p in soup.find_all('p'):
-        p['class'] = 'mobile-p'
-        p['style'] = 'font-size: 15px; line-height: 1.6; margin: 10px 0; color: #444;'
-    
-    # تقييد العرض وتحسين التنسيق
-    content = str(soup.body) if soup.body else str(soup)
-    content = content.replace('<body', '<div class="mobile-content"').replace('</body>', '</div>')
-    content = re.sub(r'<script\b[^<]*(?:(?!</script>)<[^<]*)*</script>', '', content, flags=re.IGNORECASE)
-    
-    return content
-
-def navigate_to(url):
-    """التنقل إلى رابط جديد"""
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
-    
-    # تحديث التاريخ
-    st.session_state.history.append({
-        'url': url, 
-        'title': st.session_state.page_title
-    })
-    
-    st.session_state.current_url = url
-    st.session_state.back_enabled = len(st.session_state.history) > 1
-    st.session_state.forward_enabled = False
-    
-    # جلب المحتوى
-    result = fetch_page_content(url)
-    st.session_state.page_title = result['title']
-    st.session_state.page_content = result['content']
-    
-    if result['status'] == 'error':
-        st.session_state.error_message = result.get('error', 'خطأ غير معروف')
-    
-    return result
-
-def go_back():
-    """العودة للصفحة السابقة"""
-    if len(st.session_state.history) > 1:
-        # حفظ الصفحة الحالية
-        current_page = st.session_state.history.pop()
+        if tab_id is None:
+            tab_id = self.active_tab
+            
+        # تنظيف الرابط
+        clean_url = url.strip()
+        if not clean_url.startswith(('http://', 'https://')):
+            clean_url = 'https://' + clean_url
+            
+        # التحقق من صحة الرابط
+        try:
+            parsed = urlparse(clean_url)
+            if not parsed.netloc:
+                return False, "رابط غير صالح"
+        except:
+            return False, "رابط غير صالح"
         
-        # الحصول على الصفحة السابقة
-        prev_page = st.session_state.history[-1]
-        st.session_state.current_url = prev_page['url']
+        # بدء التحميل
+        for tab in self.tabs:
+            if tab['id'] == tab_id:
+                tab['loading'] = True
+                tab['url'] = clean_url
+                break
+                
+        # إضافة للسجل
+        if any(tab['id'] == tab_id for tab in self.tabs):
+            current_tab = self.get_tab_by_id(tab_id)
+            if current_tab and current_tab.get('url'):
+                self.history.append({
+                    'url': current_tab['url'],
+                    'title': current_tab['title'],
+                    'timestamp': time.time()
+                })
+                self.future.clear()
+        
+        # محاكاة شريط التقدم
+        self.simulate_loading()
         
         # جلب المحتوى
-        result = fetch_page_content(st.session_state.current_url)
-        st.session_state.page_title = result['title']
-        st.session_state.page_content = result['content']
+        success, content = self.fetch_page_content(clean_url)
         
-        st.session_state.back_enabled = len(st.session_state.history) > 1
-        st.session_state.forward_enabled = True
-
-# العنوان الرئيسي
-st.title("📱 متصفح هاتفي يعمل بـ requests")
-
-# المواقع السريعة
-st.markdown('<div class="quick-tabs">', unsafe_allow_html=True)
-cols = st.columns(len(COMPATIBLE_SITES))
-for i, site in enumerate(COMPATIBLE_SITES):
-    with cols[i]:
-        if st.button(f"{site['icon']} {site['name']}", key=f"quick_{site['name']}"):
-            navigate_to(site['url'])
-            st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
-# شريط العناوين
-col1, col2, col3 = st.columns([1, 4, 1])
-
-with col1:
-    st.button("←", key="back_btn", disabled=not st.session_state.back_enabled, 
-             on_click=go_back, use_container_width=True)
-
-with col2:
-    url_input = st.text_input("العنوان:", value=st.session_state.current_url, 
-                             label_visibility="collapsed")
-    if url_input and url_input != st.session_state.current_url:
-        navigate_to(url_input)
-        st.rerun()
-
-with col3:
-    if st.button("↻", key="reload_btn", use_container_width=True):
-        navigate_to(st.session_state.current_url)
-        st.rerun()
-
-# متصفح الهاتف
-st.markdown('<div class="mobile-container">', unsafe_allow_html=True)
-st.markdown('<div class="mobile-browser">', unsafe_allow_html=True)
-
-# شريط الحالة
-st.markdown(f"""
-<div class="status-bar">
-    <div>{time.strftime('%H:%M')}</div>
-    <div>📶 📶 🔋</div>
-</div>
-""", unsafe_allow_html=True)
-
-# شريط التنقل
-current_url_display = st.session_state.current_url
-if len(current_url_display) > 25:
-    current_url_display = current_url_display[:25] + "..."
-
-st.markdown(f"""
-<div class="browser-chrome">
-    <div class="nav-bar">
-        <button class="nav-btn" onclick="goBack()">←</button>
-        <button class="nav-btn" onclick="reloadPage()">↻</button>
-        <div class="url-display">{current_url_display}</div>
-        <button class="nav-btn" onclick="homePage()">🏠</button>
-    </div>
-""", unsafe_allow_html=True)
-
-# منطقة المحتوى
-if st.session_state.loading:
-    st.markdown("""
-    <div class="browser-content">
-        <div class="loading-indicator">
-            <div class="spinner"></div>
-            <p>جارٍ تحميل الصفحة...</p>
-        </div>
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    # عرض المحتوى أو رسالة الخطأ
-    content_display = st.session_state.page_content if st.session_state.page_content else """
-    <div class="loading-indicator">
-        <h3>مرحبًا بمتصفح الهاتف</h3>
-        <p>أدخل عنوان موقع في شريط العناوين أو اختر من المواقع المقترحة</p>
-        <div style="margin-top: 20px;">
-            <button onclick="navigateTo('https://example.com')" style="padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">بدء التجربة</button>
-        </div>
-    </div>
-    """
+        # تحديث علامة التبويب
+        for tab in self.tabs:
+            if tab['id'] == tab_id:
+                tab['loading'] = False
+                tab['content'] = content
+                if success:
+                    tab['title'] = self.extract_page_title(content) or parsed.netloc
+                else:
+                    tab['title'] = "خطأ في التحميل"
+                break
+                
+        return success, "تم التحميل بنجاح" if success else content
     
-    st.markdown(f"""
-    <div class="browser-content">
-        {content_display}
-    </div>
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# JavaScript للتحكم في المتصفح - تم تصحيح سطر 269
-st.markdown("""
-<script>
-function goBack() {
-    // سيتم التعامل مع هذا في Python
-}
-
-function reloadPage() {
-    window.location.reload();
-}
-
-function homePage() {
-    navigateTo('https://example.com');
-}
-
-function navigateTo(url) {
-    // تحديث شريط العنوان
-    const urlDisplay = document.querySelector('.url-display');
-    if (urlDisplay) {
-        urlDisplay.textContent = url.length > 25 ? url.substring(0, 25) + '...' : url;
-    }
+    def simulate_loading(self):
+        """محاكاة شريط تقدم التحميل"""
+        self.loading_progress = 0
+        # في تطبيق حقيقي، يمكن استخدام مؤشر تقدم حقيقي
     
-    // إظهار مؤشر التحميل
-    const contentDiv = document.querySelector('.browser-content');
-    if (contentDiv) {
-        contentDiv.innerHTML = `
-            <div class="loading-indicator">
-                <div class="spinner"></div>
-                <p>جارٍ التحميل...</p>
+    def fetch_page_content(self, url):
+        """جلب محتوى الصفحة بجودة عالية"""
+        try:
+            response = self.session.get(url, timeout=15, allow_redirects=True)
+            response.raise_for_status()
+            
+            # التحقق من نوع المحتوى
+            content_type = response.headers.get('content-type', '').lower()
+            if 'text/html' not in content_type:
+                return False, "هذا النوع من المحتوى غير مدعوم"
+                
+            return True, response.text
+            
+        except requests.exceptions.Timeout:
+            return False, "انتهت مهلة الاتصال"
+        except requests.exceptions.ConnectionError:
+            return False, "تعذر الاتصال بالخادم"
+        except requests.exceptions.HTTPError as e:
+            return False, f"خطأ HTTP: {e.response.status_code}"
+        except Exception as e:
+            return False, f"خطأ غير متوقع: {str(e)}"
+    
+    def extract_page_title(self, html_content):
+        """استخراج عنوان الصفحة بدقة"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            title = soup.find('title')
+            if title and title.string:
+                return title.string.strip()
+            
+            # البحث في عناصر h1 إذا لم يوجد title
+            h1 = soup.find('h1')
+            if h1 and h1.get_text(strip=True):
+                return h1.get_text(strip=True)
+                
+            return None
+        except:
+            return None
+    
+    def process_content_for_display(self, html_content, base_url):
+        """معالجة المحتوى لعرض تفاعلي عالي الجودة"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # إضافة base href لضمان عمل الروابط
+            base_tag = soup.new_tag('base', href=base_url)
+            if soup.head:
+                soup.head.insert(0, base_tag)
+            
+            # معالجة جميع الروابط لجعلها قابلة للنقر
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                absolute_url = urljoin(base_url, href)
+                
+                # جعل الروابط تفاعلية
+                link['onclick'] = f'''
+                event.preventDefault();
+                window.parent.postMessage({{
+                    type: 'BROWSER_NAVIGATE',
+                    url: '{absolute_url}'
+                }}, '*');
+                '''
+                link['style'] = 'color: #0066cc; text-decoration: underline; cursor: pointer;'
+                link['title'] = f'انتقل إلى: {absolute_url}'
+            
+            # تحسين الصور
+            for img in soup.find_all('img', src=True):
+                img_src = img['src']
+                absolute_src = urljoin(base_url, img_src)
+                img['src'] = absolute_src
+                img['style'] = 'max-width: 100%; height: auto;'
+                img['loading'] = 'lazy'
+            
+            # تحسين النماذج
+            for form in soup.find_all('form'):
+                form['onsubmit'] = '''
+                event.preventDefault();
+                window.parent.postMessage({
+                    type: 'BROWSER_FORM_SUBMIT',
+                    formData: Object.fromEntries(new FormData(this)),
+                    action: this.action,
+                    method: this.method
+                }, '*');
+                return false;
+                '''
+            
+            # إضافة CSS لتحسين العرض
+            style_tag = soup.new_tag('style')
+            style_tag.string = """
+                body {
+                    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+                    line-height: 1.6;
+                    margin: 0;
+                    padding: 20px;
+                    color: #242424;
+                    background: white;
+                    max-width: 100%;
+                    overflow-x: hidden;
+                }
+                * {
+                    box-sizing: border-box;
+                }
+                a {
+                    color: #0066cc;
+                    text-decoration: underline;
+                    cursor: pointer;
+                }
+                a:hover {
+                    color: #004499;
+                    text-decoration: none;
+                }
+                img {
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 4px;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 10px 0;
+                }
+                table, th, td {
+                    border: 1px solid #ddd;
+                }
+                th, td {
+                    padding: 8px 12px;
+                    text-align: left;
+                }
+                th {
+                    background: #f5f5f5;
+                }
+                form {
+                    background: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 6px;
+                    margin: 10px 0;
+                }
+                input, textarea, select {
+                    width: 100%;
+                    padding: 8px 12px;
+                    margin: 5px 0;
+                    border: 1px solid #ccc;
+                    border-radius: 4px;
+                    font-family: inherit;
+                }
+                button {
+                    background: #0078d4;
+                    color: white;
+                    border: none;
+                    padding: 10px 20px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    margin: 5px;
+                }
+                button:hover {
+                    background: #106ebe;
+                }
+                @media (max-width: 768px) {
+                    body {
+                        padding: 15px;
+                        font-size: 14px;
+                    }
+                }
+            """
+            if soup.head:
+                soup.head.append(style_tag)
+            
+            return str(soup)
+            
+        except Exception as e:
+            return f"""
+            <div class="error-message">
+                <h3>⚠️ خطأ في معالجة المحتوى</h3>
+                <p>تعذر معالجة الصفحة للعرض التفاعلي.</p>
+                <p><strong>الخطأ:</strong> {str(e)}</p>
+                <button onclick="window.location.reload()" style="background: #0078d4; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+                    إعادة تحميل الصفحة
+                </button>
             </div>
-        `;
-    }
+            """
     
-    // إرسال رسالة إلى Streamlit
-    if (window.parent !== window) {
+    def add_tab(self, url=""):
+        """إضافة علامة تبويب جديدة"""
+        new_tab_id = max([tab['id'] for tab in self.tabs]) + 1 if self.tabs else 1
+        self.tabs.append({
+            "id": new_tab_id,
+            "title": "علامة تبويب جديدة",
+            "url": url,
+            "favicon": "🌐",
+            "content": "",
+            "status": "active",
+            "loading": False
+        })
+        self.active_tab = new_tab_id
+        return new_tab_id
+    
+    def close_tab(self, tab_id):
+        """إغلاق علامة تبويب"""
+        if len(self.tabs) > 1:
+            self.tabs = [tab for tab in self.tabs if tab['id'] != tab_id]
+            if self.active_tab == tab_id:
+                self.active_tab = self.tabs[0]['id']
+            return True
+        return False
+    
+    def get_active_tab(self):
+        """الحصول على علامة التبويب النشطة"""
+        for tab in self.tabs:
+            if tab['id'] == self.active_tab:
+                return tab
+        if self.tabs:
+            self.active_tab = self.tabs[0]['id']
+            return self.tabs[0]
+        return None
+    
+    def get_tab_by_id(self, tab_id):
+        """الحصول على علامة تبويب حسب المعرف"""
+        for tab in self.tabs:
+            if tab['id'] == tab_id:
+                return tab
+        return None
+
+# تهيئة المتصفح
+if 'desktop_browser' not in st.session_state:
+    st.session_state.desktop_browser = ProfessionalDesktopBrowser()
+
+# JavaScript للتفاعل
+browser_js = """
+<script>
+// التعامل مع التنقل من المحتوى
+window.addEventListener('message', function(event) {
+    if (event.data.type === 'BROWSER_NAVIGATE') {
+        // إرسال طلب التنقل إلى Streamlit
         window.parent.postMessage({
-            type: 'navigate',
-            url: url
+            type: 'streamlit:setComponentValue',
+            value: event.data.url
         }, '*');
     }
-}
+});
 
-// مستمع للأحداث من Streamlit
-window.addEventListener('message', function(event) {
-    if (event.data.type === 'navigate') {
-        navigateTo(event.data.url);
+// جعل الصفحة تفاعلية
+document.addEventListener('click', function(e) {
+    if (e.target.tagName === 'A' && e.target.onclick) {
+        e.preventDefault();
+        e.target.onclick(e);
+    }
+});
+
+// التعامل مع النماذج
+document.addEventListener('submit', function(e) {
+    if (e.target.tagName === 'FORM' && e.target.onsubmit) {
+        e.preventDefault();
+        e.target.onsubmit(e);
     }
 });
 </script>
-""", unsafe_allow_html=True)
+"""
 
-# تحميل المحتوى الأولي إذا لم يكن محملًا
-if not st.session_state.page_content:
-    result = fetch_page_content(st.session_state.current_url)
-    st.session_state.page_title = result['title']
-    st.session_state.page_content = result['content']
-    if result['status'] == 'error':
-        st.session_state.error_message = result.get('error', 'خطأ في التحميل')
+# واجهة المستخدم الرئيسية
+st.title("🖥️ متصفح ديسكتوب محترف")
 
-# لوحة التحكم
-with st.sidebar:
-    st.header("🔧 المواقع الموثوقة")
-    st.markdown("""
-    هذه المواقع تعمل بشكل مضمون مع المتصفح:
-    """)
+# شريط التحكم العلوي
+col1, col2, col3, col4, col5 = st.columns([1, 1, 4, 1, 1])
+
+with col1:
+    if st.button("◀", help="العودة", use_container_width=True):
+        active_tab = st.session_state.desktop_browser.get_active_tab()
+        if active_tab and st.session_state.desktop_browser.history:
+            st.session_state.desktop_browser.future.append({
+                'url': active_tab['url'],
+                'title': active_tab['title'],
+                'timestamp': time.time()
+            })
+            last_page = st.session_state.desktop_browser.history.pop()
+            st.session_state.desktop_browser.navigate_to(last_page['url'])
+            st.rerun()
+
+with col2:
+    if st.button("▶", help="التقدم", use_container_width=True):
+        if st.session_state.desktop_browser.future:
+            next_page = st.session_state.desktop_browser.future.pop()
+            st.session_state.desktop_browser.navigate_to(next_page['url'])
+            st.rerun()
+
+with col3:
+    active_tab = st.session_state.desktop_browser.get_active_tab()
+    current_url = active_tab['url'] if active_tab else ""
     
-    for site in COMPATIBLE_SITES:
-        if st.button(f"{site['icon']} {site['name']}", key=f"side_{site['name']}", use_container_width=True):
-            navigate_to(site['url'])
+    url_input = st.text_input(
+        "أدخل عنوان الويب:",
+        value=current_url,
+        placeholder="https://www.example.com",
+        label_visibility="collapsed",
+        key="url_input"
+    )
+    
+    if st.button("➤ انتقل", use_container_width=True) or (url_input and url_input != current_url):
+        success, message = st.session_state.desktop_browser.navigate_to(url_input)
+        if success:
+            st.success("تم تحميل الصفحة بنجاح")
+        else:
+            st.error(f"خطأ: {message}")
+        st.rerun()
+
+with col4:
+    if st.button("↻", help="إعادة تحميل", use_container_width=True):
+        active_tab = st.session_state.desktop_browser.get_active_tab()
+        if active_tab and active_tab['url']:
+            st.session_state.desktop_browser.navigate_to(active_tab['url'])
+            st.rerun()
+
+with col5:
+    if st.button("➕", help="علامة تبويب جديدة", use_container_width=True):
+        st.session_state.desktop_browser.add_tab()
+        st.rerun()
+
+# عرض علامات التبويب
+browser = st.session_state.desktop_browser
+if browser.tabs:
+    st.write("**علامات التبويب النشطة:**")
+    tab_cols = st.columns(len(browser.tabs) + 1)
+    
+    for idx, tab in enumerate(browser.tabs):
+        with tab_cols[idx]:
+            tab_label = f"{tab['favicon']} {tab['title'][:15]}..."
+            is_active = tab['id'] == browser.active_tab
+            
+            if st.button(tab_label, 
+                       key=f"tab_{tab['id']}", 
+                       use_container_width=True,
+                       type="primary" if is_active else "secondary"):
+                browser.active_tab = tab['id']
+                st.rerun()
+
+# متصفح الديسكتوب
+st.markdown("### نافذة المتصفح:")
+
+# جلب المحتوى الحالي
+active_tab = browser.get_active_tab()
+display_content = ""
+
+if active_tab:
+    if active_tab['loading']:
+        display_content = """
+        <div class="loading-indicator">
+            <div class="spinner"></div>
+            <p>جاري تحميل الصفحة...</p>
+        </div>
+        """
+    elif active_tab['content']:
+        display_content = browser.process_content_for_display(
+            active_tab['content'], 
+            active_tab['url']
+        )
+    else:
+        display_content = """
+        <div class="website-content">
+            <div style="text-align: center; padding: 80px 20px;">
+                <h1 style="color: #0078d4; font-size: 48px; margin-bottom: 20px;">🌐</h1>
+                <h2 style="color: #242424; margin-bottom: 15px;">مرحباً بك في المتصفح المحترف</h2>
+                <p style="color: #666; margin-bottom: 30px; font-size: 16px; line-height: 1.6;">
+                    أدخل عنوان URL في شريط العنوان أعلاه لبدء تصفح الإنترنت<br>
+                    استخدم علامات التبويب لفتح عدة صفحات في وقت واحد
+                </p>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; max-width: 800px; margin: 0 auto;">
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                        <h3 style="color: #242424; margin-bottom: 10px;">🔍 تصفح سريع</h3>
+                        <p style="color: #666; font-size: 14px;">ابحث وانتقل لأي موقع بسهولة</p>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                        <h3 style="color: #242424; margin-bottom: 10px;">📑 علامات متعددة</h3>
+                        <p style="color: #666; font-size: 14px;">افتح عدة صفحات معاً</p>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
+                        <h3 style="color: #242424; margin-bottom: 10px;">⚡ أداء عالي</h3>
+                        <p style="color: #666; font-size: 14px;">تجربة تصفح سريعة وسلسة</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """
+
+# بناء واجهة المتصفح الكاملة
+desktop_html = f"""
+<div class="desktop-browser">
+    <div class="progress-bar" style="width: {browser.loading_progress}%"></div>
+    
+    <div class="title-bar">
+        <div class="window-controls">
+            <div class="control-btn close-btn"></div>
+            <div class="control-btn minimize-btn"></div>
+            <div class="control-btn maximize-btn"></div>
+        </div>
+        <div class="window-title">{active_tab['title'] if active_tab else 'متصفح ديسكتوب'}</div>
+    </div>
+    
+    <div class="toolbar">
+        <button class="toolbar-btn" onclick="window.history.back()">◀ عودة</button>
+        <button class="toolbar-btn" onclick="window.history.forward()">▶ تقدم</button>
+        <button class="toolbar-btn" onclick="window.location.reload()">↻ إعادة تحميل</button>
+        
+        <div class="url-container">
+            <div class="security-badge">آمن</div>
+            <input type="text" class="url-bar" value="{active_tab['url'] if active_tab else ''}" readonly>
+        </div>
+        
+        <button class="toolbar-btn" onclick="window.parent.postMessage({{type: 'BROWSER_HOME'}}, '*')">🏠 رئيسية</button>
+    </div>
+    
+    <div class="tab-container">
+        {"".join([f'''
+        <div class="browser-tab {'active' if tab['id'] == browser.active_tab else ''}" 
+             onclick="window.parent.postMessage({{type: 'BROWSER_SWITCH_TAB', tabId: {tab['id']}}}, '*')">
+            <span class="tab-favicon">{tab['favicon']}</span>
+            <span class="tab-title">{tab['title']}</span>
+            <span class="tab-close" onclick="event.stopPropagation(); window.parent.postMessage({{type: 'BROWSER_CLOSE_TAB', tabId: {tab['id']}}}, '*')">×</span>
+        </div>
+        ''' for tab in browser.tabs])}
+        <button class="new-tab-btn" onclick="window.parent.postMessage({{type: 'BROWSER_NEW_TAB'}}, '*')">+</button>
+    </div>
+    
+    <div class="content-area">
+        <div class="browser-content">
+            {display_content}
+            {browser_js}
+        </div>
+    </div>
+    
+    <div class="status-bar">
+        <span>مستعد</span>
+        <span>متصفح ديسكتوب محترف</span>
+    </div>
+</div>
+"""
+
+# عرض المتصفح
+st.components.v1.html(desktop_html, height=600, scrolling=True)
+
+# لوحة التحكم الجانبية
+with st.sidebar:
+    st.header("⚙️ لوحة التحكم")
+    
+    st.subheader("🌐 مواقع سريعة")
+    quick_sites = [
+        ("Google", "https://www.google.com"),
+        ("Wikipedia", "https://www.wikipedia.org"),
+        ("GitHub", "https://www.github.com"),
+        ("Stack Overflow", "https://stackoverflow.com"),
+        ("YouTube", "https://www.youtube.com"),
+        ("Amazon", "https://www.amazon.com"),
+        ("Twitter", "https://twitter.com"),
+        ("LinkedIn", "https://www.linkedin.com")
+    ]
+    
+    for site_name, site_url in quick_sites:
+        if st.button(site_name, use_container_width=True, key=f"quick_{site_name}"):
+            success, message = browser.navigate_to(site_url)
+            if success:
+                st.success(f"تم الانتقال إلى {site_name}")
+            else:
+                st.error(f"خطأ: {message}")
             st.rerun()
     
-    st.subheader("معلومات")
-    st.info("""
-    - ✅ يعمل 100% على Streamlit Cloud
-    - ✅ لا يحتاج إلى أي إعدادات خاصة
-    - ✅ يدعم جميع الأحجام والهواتف
-    - ✅ لا يتأثر بسياسات iframe
-    - ✅ سريع وموثوق
+    st.subheader("📚 سجل التصفح")
+    if browser.history:
+        for i, visit in enumerate(reversed(browser.history[-8:])):
+            display_title = visit['title'][:25] + "..." if len(visit['title']) > 25 else visit['title']
+            if st.button(f"📄 {display_title}", key=f"hist_{i}", use_container_width=True):
+                browser.navigate_to(visit['url'])
+                st.rerun()
+    else:
+        st.info("لا يوجد سجل تصفح بعد")
     
-    للمواقع المعقدة التي لا تعمل، استخدم متصفحك العادي.
+    st.subheader("🔧 أدوات متقدمة")
+    
+    if st.button("🧹 مسح الذاكرة المؤقتة", use_container_width=True):
+        browser.session.cookies.clear()
+        st.success("تم مسح الذاكرة المؤقتة")
+    
+    if st.button("🗑️ مسح سجل التصفح", use_container_width=True):
+        browser.history.clear()
+        browser.future.clear()
+        st.success("تم مسح سجل التصفح")
+    
+    if st.button("🔄 إعادة تعيين المتصفح", use_container_width=True):
+        st.session_state.desktop_browser = ProfessionalDesktopBrowser()
+        st.success("تم إعادة تعيين المتصفح")
+        st.rerun()
+    
+    st.subheader("ℹ️ معلومات")
+    st.info("""
+    **مميزات المتصفح:**
+    
+    - ✅ تنقل كامل بين الصفحات
+    - 📑 علامات تبويب متعددة
+    - 🔍 بحث سريع ومباشر
+    - 🛡️ عرض آمن ومحمي
+    - ⚡ أداء عالي وسريع
+    - 💾 حفظ السجل والتاريخ
     """)
+
+# معلومات إضافية
+with st.expander("📊 إحصائيات المتصفح"):
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("علامات التبويب", len(browser.tabs))
+    
+    with col2:
+        st.metric("الصفحات المزورة", len(browser.history))
+    
+    with col3:
+        st.metric("الصفحات القادمة", len(browser.future))
+    
+    with col4:
+        if active_tab:
+            domain = urlparse(active_tab['url']).netloc
+            st.metric("المجال الحالي", domain[:12] + "..." if len(domain) > 12 else domain)
 
 # تذييل الصفحة
 st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: #666; padding: 10px;'>
-    <p><strong>📱 متصفح هاتفي بـ requests</strong> | يعمل على جميع إصدارات Streamlit Cloud</p>
-    <p>حل مضمون بدون أخطاء في السائق أو iframe</p>
+<div style='text-align: center; color: #666; padding: 20px;'>
+    <p style='font-size: 16px; font-weight: bold; color: #0078d4;'>🖥️ متصفح ديسكتوب محترف</p>
+    <p style='font-size: 14px;'>تجربة تصفح حقيقية • أداء عالي • واجهة مستخدم متطورة</p>
 </div>
 """, unsafe_allow_html=True)
