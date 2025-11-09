@@ -2,7 +2,6 @@ import streamlit as st
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
 import os
 import json
 import time
@@ -10,12 +9,51 @@ import time
 """
 ## Web Scraping with Session Management on Streamlit Cloud
 
-تطبيق يدعم جلسات التصفح مع إمكانية الدخول المباشر أو استخدام جلسة محفوظة.
+حل نهائي لمشكلة السائق (Driver) مع دعم كامل لحفظ الجلسات واستعادتها.
 """
 
 # اسم الملف لحفظ الكوكيز
 COOKIES_FILE = "/mount/src/cookies/session_cookies.json"
 os.makedirs(os.path.dirname(COOKIES_FILE), exist_ok=True)
+
+@st.cache_resource
+def get_driver():
+    """تهيئة المتصفح بطريقة متوافقة مع Streamlit Cloud"""
+    # التحقق من وجود chromedriver في النظام
+    driver_path = "/usr/bin/chromedriver"
+    browser_path = "/usr/bin/chromium-browser"
+    
+    # التأكد من وجود الملفات المطلوبة
+    if not os.path.exists(driver_path):
+        st.error(f"⚠️ chromedriver غير موجود في: {driver_path}")
+        st.info("جاري محاولة استخدام مسار بديل...")
+        # مسار بديل محتمل
+        driver_path = "/usr/local/bin/chromedriver"
+    
+    if not os.path.exists(browser_path):
+        st.error(f"⚠️ chromium-browser غير موجود في: {browser_path}")
+    
+    # إعداد خيارات المتصفح
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--disable-setuid-sandbox")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-background-networking")
+    options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    
+    # تحديد مسار المتصفح يدويًا
+    options.binary_location = browser_path
+    
+    # إنشاء خدمة chromedriver
+    service = Service(executable_path=driver_path)
+    
+    # إنشاء المتصفح
+    driver = webdriver.Chrome(service=service, options=options)
+    return driver
 
 def save_cookies_to_file(driver, filename=COOKIES_FILE):
     """تحفظ الكوكيز الحالية من المتصفح إلى ملف محلي."""
@@ -45,7 +83,9 @@ def load_cookies_from_file(driver, base_url, filename=COOKIES_FILE):
         success_count = 0
         for cookie in cookies:
             try:
-                cookie.pop('sameSite', None)
+                # إزالة الخصائص التي قد تسبب مشاكل
+                for key in ['expiry', 'sameSite']:
+                    cookie.pop(key, None)
                 driver.add_cookie(cookie)
                 success_count += 1
             except Exception as e:
@@ -60,28 +100,8 @@ def load_cookies_from_file(driver, base_url, filename=COOKIES_FILE):
         st.error(f"✗ فشل تحميل الكوكيز: {e}")
         return False
 
-@st.cache_resource
-def get_driver():
-    """إنشاء مثيل المتصفح المناسب لبيئة Streamlit Cloud"""
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-setuid-sandbox")
-    options.binary_location = "/usr/bin/chromium-browser"
-    service = Service(executable_path="/usr/bin/chromedriver")
-    driver = webdriver.Chrome(service=service, options=options)
-    return driver
-
-# --- الواجهة الرئيسية مع الزرين ---
+# --- الواجهة الرئيسية ---
 st.title("مدير جلسات التصفح")
-
-st.markdown("""
-### اختر طريقة الدخول:
-اختر بين الدخول المباشر أو استخدام جلسة محفوظة (إذا كانت متوفرة)
-""")
 
 col1, col2 = st.columns(2)
 
@@ -93,16 +113,11 @@ with col2:
     session_access = st.button("🍪 استخدام الجلسة المحفوظة", use_container_width=True,
                               help="استخدم الجلسة المحفوظة مسبقًا (إذا كانت متوفرة)")
 
-# --- الإعدادات المتقدمة (قابلة للطي) ---
-with st.expander("⚙️ الإعدادات المتقدمة"):
-    site_url = st.text_input("رابط الموقع الافتراضي", "https://example.com")
+# --- الإعدادات ---
+with st.expander("⚙️ الإعدادات"):
+    site_url = st.text_input("رابط الموقع", "https://example.com", key="site_url")
+    login_url = st.text_input("رابط تسجيل الدخول", "https://example.com/login", key="login_url")
     
-    st.subheader("إعدادات تسجيل الدخول")
-    login_url = st.text_input("رابط صفحة تسجيل الدخول", "https://example.com/login")
-    username = st.text_input("اسم المستخدم للتسجيل")
-    password = st.text_input("كلمة المرور", type="password")
-    
-    st.subheader("إدارة الجلسات")
     if st.button("🗑️ مسح الجلسة المحفوظة"):
         try:
             if os.path.exists(COOKIES_FILE):
@@ -114,96 +129,55 @@ with st.expander("⚙️ الإعدادات المتقدمة"):
         except Exception as e:
             st.error(f"✗ خطأ في مسح ملف الجلسة: {e}")
 
-# --- نتيجة التنفيذ ---
+# --- مناطق العرض ---
 result_container = st.empty()
 source_container = st.empty()
 
-# --- معالجة زر الدخول المباشر ---
+# --- الدخول المباشر ---
 if direct_access:
-    with st.spinner("جاري فتح المتصفح..."):
-        driver = get_driver()
+    with st.spinner("جاري تحميل المتصفح... (قد يستغرق بضع ثوانٍ)"):
         try:
+            driver = get_driver()
             driver.get(site_url)
             time.sleep(3)
             
-            result_container.success(f"✓ تم الدخول بنجاح إلى {site_url}")
+            result_container.success(f"✓ تم التحميل بنجاح: {site_url}")
             
-            # خيار حفظ الجلسة بعد التصفح
-            if st.button("حفظ هذه الجلسة"):
+            # زر حفظ الجلسة بعد التصفح
+            if st.button("حفظ هذه الجلسة الحالية"):
                 save_cookies_to_file(driver)
-                st.rerun()
             
-            # عرض مصدر الصفحة
+            # عرض جزء من مصدر الصفحة
             page_source = driver.page_source
-            source_container.text_area("مصدر الصفحة", page_source[:2000] + "...", height=300)
+            source_container.text_area("مصدر الصفحة", page_source[:1500] + "...", height=300)
         except Exception as e:
-            result_container.error(f"✗ حدث خطأ: {e}")
+            result_container.error(f"✗ خطأ أثناء التحميل: {str(e)}")
+            st.code(str(e))
         finally:
-            driver.quit()
+            try:
+                driver.quit()
+            except:
+                pass
 
-# --- معالجة زر استخدام الجلسة المحفوظة ---
+# --- استخدام الجلسة المحفوظة ---
 if session_access:
     with st.spinner("جاري تحميل الجلسة المحفوظة..."):
-        driver = get_driver()
         try:
+            driver = get_driver()
             if load_cookies_from_file(driver, site_url):
                 driver.get(site_url)
                 time.sleep(3)
                 
-                result_container.success(f"✓ تم الدخول باستخدام الجلسة المحفوظة إلى {site_url}")
-                
-                # عرض مصدر الصفحة
+                result_container.success(f"✓ تم التحميل باستخدام الجلسة المحفوظة: {site_url}")
                 page_source = driver.page_source
-                source_container.text_area("مصدر الصفحة", page_source[:2000] + "...", height=300)
+                source_container.text_area("مصدر الصفحة", page_source[:1500] + "...", height=300)
             else:
-                # إذا لم توجد جلسة محفوظة، اعرض رسالة وخيارات بديلة
-                result_container.warning("⚠️ لم يتم العثور على جلسة محفوظة")
-                
-                if username and password:
-                    if st.button("تسجيل الدخول وحفظ الجلسة الجديدة"):
-                        with st.spinner("جاري تسجيل الدخول..."):
-                            try:
-                                driver.get(login_url)
-                                time.sleep(3)
-                                
-                                # محاولة العثور على حقول تسجيل الدخول (تحتاج للتخصيص حسب الموقع)
-                                try:
-                                    username_field = driver.find_element(By.NAME, "username") or \
-                                                    driver.find_element(By.ID, "username") or \
-                                                    driver.find_element(By.CSS_SELECTOR, "input[type='text']")
-                                    
-                                    password_field = driver.find_element(By.NAME, "password") or \
-                                                    driver.find_element(By.ID, "password") or \
-                                                    driver.find_element(By.CSS_SELECTOR, "input[type='password']")
-                                    
-                                    submit_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit']")
-                                    
-                                    username_field.send_keys(username)
-                                    password_field.send_keys(password)
-                                    submit_button.click()
-                                    time.sleep(5)
-                                    
-                                    # حفظ الكوكيز بعد تسجيل الدخول
-                                    save_cookies_to_file(driver)
-                                    
-                                    # إعادة تحميل الصفحة الرئيسية
-                                    driver.get(site_url)
-                                    time.sleep(3)
-                                    
-                                    result_container.success("✓ تم تسجيل الدخول وحفظ الجلسة الجديدة")
-                                    
-                                    # عرض مصدر الصفحة
-                                    page_source = driver.page_source
-                                    source_container.text_area("مصدر الصفحة", page_source[:2000] + "...", height=300)
-                                    
-                                except Exception as e:
-                                    st.error(f"✗ فشل عملية تسجيل الدخول: {e}")
-                                    source_container.text_area("مصدر صفحة تسجيل الدخول", driver.page_source[:2000] + "...", height=300)
-                            except Exception as e:
-                                st.error(f"✗ حدث خطأ أثناء تسجيل الدخول: {e}")
-                else:
-                    st.info("ⓘ يرجى إدخال بيانات تسجيل الدخول في الإعدادات المتقدمة لحفظ جلسة جديدة")
+                result_container.warning("ⓘ لم يتم العثور على جلسة محفوظة. يرجى محاولة الدخول المباشر ثم حفظ الجلسة.")
         except Exception as e:
-            result_container.error(f"✗ حدث خطأ: {e}")
+            result_container.error(f"✗ خطأ أثناء تحميل الجلسة: {str(e)}")
+            st.code(str(e))
         finally:
-            driver.quit()
+            try:
+                driver.quit()
+            except:
+                pass
