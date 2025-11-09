@@ -196,15 +196,6 @@ st.markdown("""
         padding: 10px;
         border-bottom: 1px solid #eee;
     }
-    
-    /* تأثيرات التحميل */
-    .loading {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100px;
-        color: #666;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -354,6 +345,48 @@ class MobileBrowserSimulator:
                 </div>
             </div>
             """
+    
+    def add_tab(self, url=""):
+        """إضافة علامة تبويب جديدة"""
+        new_tab_id = max([tab['id'] for tab in self.tabs]) + 1 if self.tabs else 1
+        self.tabs.append({
+            "id": new_tab_id,
+            "title": "علامة تبويب جديدة",
+            "url": url,
+            "favicon": "🌐",
+            "content": ""
+        })
+        self.active_tab = new_tab_id
+        return new_tab_id
+    
+    def close_tab(self, tab_id):
+        """إغلاق علامة تبويب"""
+        if len(self.tabs) > 1:
+            self.tabs = [tab for tab in self.tabs if tab['id'] != tab_id]
+            if self.active_tab == tab_id:
+                self.active_tab = self.tabs[0]['id']
+    
+    def get_active_tab(self):
+        """الحصول على علامة التبويب النشطة - مع معالجة الأخطاء"""
+        try:
+            if not self.tabs:
+                # إذا لم تكن هناك علامات تبويب، إنشاء واحدة افتراضية
+                self.tabs = [{"id": 1, "title": "علامة تبويب جديدة", "url": "", "favicon": "🌐", "content": ""}]
+                self.active_tab = 1
+            
+            for tab in self.tabs:
+                if tab['id'] == self.active_tab:
+                    return tab
+            
+            # إذا لم يتم العثور على العلامة النشطة، استخدم الأولى
+            self.active_tab = self.tabs[0]['id']
+            return self.tabs[0]
+            
+        except Exception as e:
+            # في حالة أي خطأ، إعادة تعيين المتصفح
+            self.tabs = [{"id": 1, "title": "علامة تبويب جديدة", "url": "", "favicon": "🌐", "content": ""}]
+            self.active_tab = 1
+            return self.tabs[0]
 
 # تهيئة المتصفح في حالة الجلسة
 if 'mobile_browser' not in st.session_state:
@@ -364,15 +397,19 @@ st.title("📱 متصفح محاكي للهواتف")
 
 # شريط التحكم العلوي
 col1, col2, col3 = st.columns([1, 2, 1])
+
 with col1:
     if st.button("🔄", help="إعادة تحميل", use_container_width=True):
         active_tab = st.session_state.mobile_browser.get_active_tab()
-        if active_tab and active_tab['url']:
+        if active_tab and active_tab.get('url'):
             st.session_state.mobile_browser.navigate(active_tab['url'])
             st.rerun()
 
 with col2:
-    current_url = st.session_state.mobile_browser.get_active_tab()['url'] if st.session_state.mobile_browser.get_active_tab() else ""
+    # الحصول على العنوان الحالي بشكل آمن
+    active_tab = st.session_state.mobile_browser.get_active_tab()
+    current_url = active_tab.get('url', '') if active_tab else ''
+    
     new_url = st.text_input(
         "أدخل عنوان الويب:",
         value=current_url,
@@ -389,82 +426,107 @@ with col3:
         st.session_state.mobile_browser.add_tab()
         st.rerun()
 
-# عرض علامات التبويب
-if len(st.session_state.mobile_browser.tabs) > 0:
-    st.write("**علامات التبويب المفتوحة:**")
-    tab_cols = st.columns(len(st.session_state.mobile_browser.tabs) + 1)
-    
-    for idx, tab in enumerate(st.session_state.mobile_browser.tabs):
-        with tab_cols[idx]:
-            tab_label = f"{tab['favicon']} {tab['title'][:10]}..."
-            is_active = tab['id'] == st.session_state.mobile_browser.active_tab
-            
-            if st.button(tab_label, key=f"tab_{tab['id']}", use_container_width=True, 
-                        type="primary" if is_active else "secondary"):
-                st.session_state.mobile_browser.active_tab = tab['id']
-                st.rerun()
+# عرض علامات التبويب - بشكل آمن
+browser = st.session_state.mobile_browser
+tabs = browser.tabs if hasattr(browser, 'tabs') and browser.tabs else []
 
-    with tab_cols[-1]:
-        if st.button("✕", help="إغلاق الجميع", use_container_width=True):
-            # الاحتفاظ بعلامة تبويب واحدة فقط
-            st.session_state.mobile_browser.tabs = [st.session_state.mobile_browser.tabs[0]]
-            st.session_state.mobile_browser.active_tab = st.session_state.mobile_browser.tabs[0]['id']
-            st.rerun()
+if tabs:
+    st.write("**علامات التبويب المفتوحة:**")
+    
+    # إنشاء أعمدة للعلامات
+    tab_cols = st.columns(min(len(tabs) + 1, 6))  # حد أقصى 6 أعمدة
+    
+    for idx, tab in enumerate(tabs):
+        if idx < len(tab_cols) - 1:  # احتفظ بالعمود الأخير لزر الإغلاق
+            with tab_cols[idx]:
+                tab_label = f"{tab.get('favicon', '🌐')} {tab.get('title', 'علامة جديدة')[:10]}..."
+                is_active = tab.get('id') == browser.active_tab
+                
+                if st.button(tab_label, key=f"tab_{tab.get('id', idx)}", 
+                           use_container_width=True, type="primary" if is_active else "secondary"):
+                    browser.active_tab = tab.get('id', 1)
+                    st.rerun()
+    
+    # زر إغلاق الجميع في العمود الأخير
+    if len(tabs) > 1 and len(tab_cols) > len(tabs):
+        with tab_cols[len(tabs)]:
+            if st.button("✕", help="إغلاق الجميع", use_container_width=True):
+                # الاحتفاظ بعلامة تبويب واحدة فقط
+                browser.tabs = [browser.tabs[0]]
+                browser.active_tab = browser.tabs[0]['id']
+                st.rerun()
 
 # متصفح الهاتف المحاكي
 st.markdown("### 📱 شاشة الهاتف:")
 
-# الحصول على المحتوى الحالي
+# الحصول على المحتوى الحالي بشكل آمن
 active_tab = st.session_state.mobile_browser.get_active_tab()
-current_url_display = active_tab['url'] if active_tab and active_tab['url'] else "about:blank"
-short_url = current_url_display[:30] + "..." if len(current_url_display) > 30 else current_url_display
 
-if active_tab and active_tab['content']:
-    mobile_content = st.session_state.mobile_browser.process_content_for_mobile(
-        active_tab['content'], active_tab['url']
-    )
+# القيم الافتراضية الآمنة
+current_url_display = ""
+mobile_content = ""
+
+if active_tab:
+    current_url_display = active_tab.get('url', '')
+    if active_tab.get('content'):
+        mobile_content = st.session_state.mobile_browser.process_content_for_mobile(
+            active_tab['content'], active_tab.get('url', '')
+        )
+    else:
+        # الصفحة الافتراضية للجوال
+        mobile_content = """
+        <div class="mobile-website">
+            <div class="mobile-header">
+                <h1>📱</h1>
+                <h2>متصفح الجوال المحاكي</h2>
+                <p>أدخل عنوان URL لبدء التصفح</p>
+            </div>
+            
+            <div class="mobile-card">
+                <h3>مواقع مقترحة:</h3>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <a href="#" class="mobile-link" onclick="alert('Google - اضغط على زر التصفح أعلاه')">Google</a>
+                    <a href="#" class="mobile-link" onclick="alert('Wikipedia - اضغط على زر التصفح أعلاه')">Wikipedia</a>
+                    <a href="#" class="mobile-link" onclick="alert('GitHub - اضغط على زر التصفح أعلاه')">GitHub</a>
+                </div>
+            </div>
+            
+            <div class="mobile-card">
+                <h3>مميزات المتصفح:</h3>
+                <ul class="mobile-text">
+                    <li>تصميم متجاوب للجوال</li>
+                    <li>محرك تصفح حقيقي</li>
+                    <li>علامات تبويب متعددة</li>
+                    <li>سجل التصفح</li>
+                </ul>
+            </div>
+            
+            <div class="mobile-footer">
+                <p>المتصفح المحاكي للجوال v2.0</p>
+            </div>
+        </div>
+        """
 else:
-    # الصفحة الافتراضية للجوال
+    # حالة الطوارئ عندما لا يكون هناك علامات تبويب
     mobile_content = """
     <div class="mobile-website">
         <div class="mobile-header">
-            <h1>📱</h1>
-            <h2>متصفح الجوال المحاكي</h2>
-            <p>أدخل عنوان URL لبدء التصفح</p>
-        </div>
-        
-        <div class="mobile-card">
-            <h3>مواقع مقترحة:</h3>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <a href="#" onclick="window.location.href='?url=google.com'" class="mobile-link">Google</a>
-                <a href="#" onclick="window.location.href='?url=wikipedia.org'" class="mobile-link">Wikipedia</a>
-                <a href="#" onclick="window.location.href='?url=github.com'" class="mobile-link">GitHub</a>
-                <a href="#" onclick="window.location.href='?url=stackoverflow.com'" class="mobile-link">Stack Overflow</a>
-            </div>
-        </div>
-        
-        <div class="mobile-card">
-            <h3>مميزات المتصفح:</h3>
-            <ul class="mobile-text">
-                <li>تصميم متجاوب للجوال</li>
-                <li>محرك تصفح حقيقي</li>
-                <li>علامات تبويب متعددة</li>
-                <li>سجل التصفح</li>
-            </ul>
-        </div>
-        
-        <div class="mobile-footer">
-            <p>المتصفح المحاكي للجوال v2.0</p>
+            <h1>⚠️</h1>
+            <h2>خطأ في المتصفح</h2>
+            <p>انقر على زر إعادة التعيين في الشريط الجانبي</p>
         </div>
     </div>
     """
+
+# تقصير الرابط للعرض
+short_url = current_url_display[:25] + "..." if len(current_url_display) > 25 else current_url_display
 
 # بناء واجهة الهاتف كاملة
 mobile_html = f"""
 <div class="mobile-browser-container">
     <div class="mobile-screen">
         <div class="status-bar">
-            <div class="status-time" id="currentTime">{time.strftime('%H:%M')}</div>
+            <div class="status-time">{time.strftime('%H:%M')}</div>
             <div class="status-icons">
                 <span>📶</span>
                 <span>📡</span>
@@ -477,7 +539,7 @@ mobile_html = f"""
             <button class="nav-btn" onclick="window.location.reload()">→</button>
             <div class="url-bar-mobile">
                 <span class="security-icon-mobile">🔒</span>
-                <span>{short_url}</span>
+                <span>{short_url or 'about:blank'}</span>
             </div>
             <button class="nav-btn" onclick="window.location.reload()">↻</button>
         </div>
@@ -487,7 +549,7 @@ mobile_html = f"""
         </div>
         
         <div class="mobile-toolbar">
-            <button class="toolbar-btn" onclick="window.location.href='?'">🏠</button>
+            <button class="toolbar-btn" onclick="window.location.href=window.location.pathname">🏠</button>
             <button class="toolbar-btn" onclick="window.location.reload()">◀</button>
             <button class="toolbar-btn" onclick="window.location.reload()">▶</button>
             <button class="toolbar-btn" onclick="alert('إدارة العلامات')">📑</button>
@@ -498,7 +560,19 @@ mobile_html = f"""
 """
 
 # عرض متصفح الهاتف باستخدام st.components.v1.html
-st.components.v1.html(mobile_html, height=700)
+try:
+    st.components.v1.html(mobile_html, height=700)
+except Exception as e:
+    st.error(f"خطأ في عرض المتصفح: {e}")
+    # عرض بديل في حالة الخطأ
+    st.info("""
+    **عذراً، هناك مشكلة في عرض متصفح الهاتف المحاكي.**
+    
+    جرب:
+    1. تحديث الصفحة
+    2. استخدام زر إعادة التعيين في الشريط الجانبي
+    3. التحقق من اتصال الإنترنت
+    """)
 
 # لوحة التحكم الجانبية
 with st.sidebar:
@@ -509,28 +583,32 @@ with st.sidebar:
                               ["iPhone SE (375x667)", "iPhone 12 (390x844)", "Samsung Galaxy (412x915)"])
     
     st.subheader("إدارة العلامات")
-    for tab in st.session_state.mobile_browser.tabs:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.write(f"{tab['favicon']} {tab['title'][:15]}")
-        with col2:
-            if st.button("✕", key=f"close_{tab['id']}"):
-                if len(st.session_state.mobile_browser.tabs) > 1:
-                    st.session_state.mobile_browser.close_tab(tab['id'])
-                    st.rerun()
+    if hasattr(st.session_state.mobile_browser, 'tabs') and st.session_state.mobile_browser.tabs:
+        for tab in st.session_state.mobile_browser.tabs:
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.write(f"{tab.get('favicon', '🌐')} {tab.get('title', 'علامة جديدة')[:15]}")
+            with col2:
+                if st.button("✕", key=f"close_{tab.get('id', 'unknown')}"):
+                    if len(st.session_state.mobile_browser.tabs) > 1:
+                        st.session_state.mobile_browser.close_tab(tab.get('id', 1))
+                        st.rerun()
+    else:
+        st.info("لا توجد علامات تبويب")
     
     st.subheader("سجل التصفح")
-    if st.session_state.mobile_browser.history:
-        for visit in reversed(st.session_state.mobile_browser.history[-5:]):
-            if st.button(f"📄 {visit['title'][:20]}...", key=f"history_{visit['timestamp']}"):
-                st.session_state.mobile_browser.navigate(visit['url'])
+    if hasattr(st.session_state.mobile_browser, 'history') and st.session_state.mobile_browser.history:
+        for i, visit in enumerate(reversed(st.session_state.mobile_browser.history[-5:])):
+            if st.button(f"📄 {visit.get('title', 'بدون عنوان')[:20]}...", key=f"history_{i}"):
+                st.session_state.mobile_browser.navigate(visit.get('url', ''))
                 st.rerun()
     else:
         st.info("لا يوجد سجل تصفح")
     
     st.subheader("أدوات المطور")
     if st.button("🧹 مسح الذاكرة المؤقتة"):
-        st.session_state.mobile_browser.session.cookies.clear()
+        if hasattr(st.session_state.mobile_browser, 'session'):
+            st.session_state.mobile_browser.session.cookies.clear()
         st.success("تم مسح الذاكرة المؤقتة")
     
     if st.button("🔄 إعادة تعيين المتصفح"):
@@ -543,14 +621,20 @@ with st.expander("📊 إحصائيات المتصفح"):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric("العلامات المفتوحة", len(st.session_state.mobile_browser.tabs))
+        tabs_count = len(st.session_state.mobile_browser.tabs) if hasattr(st.session_state.mobile_browser, 'tabs') else 0
+        st.metric("العلامات المفتوحة", tabs_count)
     
     with col2:
-        st.metric("الصفحات المزورة", len(st.session_state.mobile_browser.history))
+        history_count = len(st.session_state.mobile_browser.history) if hasattr(st.session_state.mobile_browser, 'history') else 0
+        st.metric("الصفحات المزورة", history_count)
     
     with col3:
+        active_tab = st.session_state.mobile_browser.get_active_tab()
         if active_tab:
-            st.metric("الصفحة النشطة", active_tab['title'][:10] + "...")
+            title = active_tab.get('title', 'بدون عنوان')[:10] + "..."
+            st.metric("الصفحة النشطة", title)
+        else:
+            st.metric("الصفحة النشطة", "لا يوجد")
 
 # تذييل الصفحة
 st.markdown("---")
