@@ -1,15 +1,18 @@
+
 import streamlit as st
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.os_manager import ChromeType
 import os
 import json
 import time
 
 """
-## Web Scraping with Session Management on Streamlit Cloud
+## Web Scraping على Streamlit Cloud - الحل النهائي
 
-حل نهائي لمشكلة السائق (Driver) مع دعم كامل لحفظ الجلسات واستعادتها.
+تم التحديث للعمل على أحدث إصدار من بيئة Streamlit Cloud باستخدام WebDriverManager.
 """
 
 # اسم الملف لحفظ الكوكيز
@@ -18,22 +21,7 @@ os.makedirs(os.path.dirname(COOKIES_FILE), exist_ok=True)
 
 @st.cache_resource
 def get_driver():
-    """تهيئة المتصفح بطريقة متوافقة مع Streamlit Cloud"""
-    # التحقق من وجود chromedriver في النظام
-    driver_path = "/usr/bin/chromedriver"
-    browser_path = "/usr/bin/chromium-browser"
-    
-    # التأكد من وجود الملفات المطلوبة
-    if not os.path.exists(driver_path):
-        st.error(f"⚠️ chromedriver غير موجود في: {driver_path}")
-        st.info("جاري محاولة استخدام مسار بديل...")
-        # مسار بديل محتمل
-        driver_path = "/usr/local/bin/chromedriver"
-    
-    if not os.path.exists(browser_path):
-        st.error(f"⚠️ chromium-browser غير موجود في: {browser_path}")
-    
-    # إعداد خيارات المتصفح
+    """تهيئة المتصفح باستخدام WebDriverManager"""
     options = Options()
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -43,13 +31,65 @@ def get_driver():
     options.add_argument("--disable-setuid-sandbox")
     options.add_argument("--disable-software-rasterizer")
     options.add_argument("--disable-background-networking")
-    options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    options.add_argument("--disable-background-timer-throttling")
+    options.add_argument("--disable-backgrounding-occluded-windows")
+    options.add_argument("--disable-renderer-backgrounding")
+    options.add_argument("--disable-infobars")
+    options.add_argument("--disable-breakpad")
+    options.add_argument("--disable-notifications")
+    options.add_argument("--mute-audio")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-service-autorun")
+    options.add_argument("--password-store=basic")
     
-    # تحديد مسار المتصفح يدويًا
-    options.binary_location = browser_path
-    
-    # إنشاء خدمة chromedriver
-    service = Service(executable_path=driver_path)
+    # استخدام Chromium على Streamlit Cloud
+    try:
+        # المحاولة الأولى: استخدام WebDriverManager لتنزيل السائق تلقائيًا
+        service = Service(
+            ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
+        )
+        st.success("✓ تم تحميل السائق تلقائيًا باستخدام WebDriverManager")
+    except Exception as e:
+        st.warning(f"⚠️ فشل تحميل السائق تلقائيًا: {e}")
+        st.info("جاري المحاولة باستخدام المسارات الافتراضية...")
+        
+        # المحاولة الثانية: استخدام المسارات الشائعة في Streamlit Cloud
+        chrome_path = None
+        driver_path = None
+        
+        # التحقق من المسارات المحتملة
+        possible_chrome_paths = [
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            "/usr/bin/google-chrome",
+            "/app/.apt/usr/bin/google-chrome"
+        ]
+        
+        possible_driver_paths = [
+            "/usr/bin/chromedriver",
+            "/usr/local/bin/chromedriver",
+            "/app/.apt/usr/bin/chromedriver"
+        ]
+        
+        for path in possible_chrome_paths:
+            if os.path.exists(path):
+                chrome_path = path
+                break
+        
+        for path in possible_driver_paths:
+            if os.path.exists(path):
+                driver_path = path
+                break
+        
+        if chrome_path and driver_path:
+            options.binary_location = chrome_path
+            service = Service(executable_path=driver_path)
+            st.success(f"✓ تم العثور على Chromium في: {chrome_path}")
+            st.success(f"✓ تم العثور على chromedriver في: {driver_path}")
+        else:
+            # الخيار الأخير: استخدام الإعدادات الافتراضية مع محاولة أفضل
+            st.warning("⚠️ استخدام الإعدادات الافتراضية للمتصفح")
+            options.add_argument("--remote-debugging-port=9222")
     
     # إنشاء المتصفح
     driver = webdriver.Chrome(service=service, options=options)
@@ -84,12 +124,18 @@ def load_cookies_from_file(driver, base_url, filename=COOKIES_FILE):
         for cookie in cookies:
             try:
                 # إزالة الخصائص التي قد تسبب مشاكل
-                for key in ['expiry', 'sameSite']:
+                problematic_keys = ['expiry', 'sameSite', 'secure', 'httpOnly']
+                for key in problematic_keys:
                     cookie.pop(key, None)
+                
+                # ضمان وجود القيم الإلزامية
+                if 'domain' not in cookie:
+                    cookie['domain'] = base_url.replace('https://', '').replace('http://', '').split('/')[0]
+                
                 driver.add_cookie(cookie)
                 success_count += 1
             except Exception as e:
-                st.warning(f"⚠️ لم يتم تحميل كوكي: {cookie.get('name', 'غير معروف')} - {e}")
+                st.warning(f"⚠️ لم يتم تحميل كوكي: {cookie.get('name', 'غير معروف')} - {str(e)}")
         
         driver.refresh()
         time.sleep(3)
@@ -97,7 +143,7 @@ def load_cookies_from_file(driver, base_url, filename=COOKIES_FILE):
         st.success(f"✓ تم تحميل {success_count} كوكي بنجاح من {filename}")
         return True
     except Exception as e:
-        st.error(f"✗ فشل تحميل الكوكيز: {e}")
+        st.error(f"✗ فشل تحميل الكوكيز: {str(e)}")
         return False
 
 # --- الواجهة الرئيسية ---
@@ -116,7 +162,6 @@ with col2:
 # --- الإعدادات ---
 with st.expander("⚙️ الإعدادات"):
     site_url = st.text_input("رابط الموقع", "https://example.com", key="site_url")
-    login_url = st.text_input("رابط تسجيل الدخول", "https://example.com/login", key="login_url")
     
     if st.button("🗑️ مسح الجلسة المحفوظة"):
         try:
@@ -127,7 +172,7 @@ with st.expander("⚙️ الإعدادات"):
             else:
                 st.info("ⓘ لا يوجد ملف جلسة محفوظة للمسح.")
         except Exception as e:
-            st.error(f"✗ خطأ في مسح ملف الجلسة: {e}")
+            st.error(f"✗ خطأ في مسح ملف الجلسة: {str(e)}")
 
 # --- مناطق العرض ---
 result_container = st.empty()
@@ -135,7 +180,7 @@ source_container = st.empty()
 
 # --- الدخول المباشر ---
 if direct_access:
-    with st.spinner("جاري تحميل المتصفح... (قد يستغرق بضع ثوانٍ)"):
+    with st.spinner("جاري تشغيل المتصفح..."):
         try:
             driver = get_driver()
             driver.get(site_url)
@@ -152,7 +197,13 @@ if direct_access:
             source_container.text_area("مصدر الصفحة", page_source[:1500] + "...", height=300)
         except Exception as e:
             result_container.error(f"✗ خطأ أثناء التحميل: {str(e)}")
-            st.code(str(e))
+            # معلومات استكشاف الأخطاء
+            st.subheader("معلومات استكشاف الأخطاء:")
+            st.code(f"""
+            - الإصدار الحالي لـ Selenium: {webdriver.__version__}
+            - الموقع المستهدف: {site_url}
+            - ملف الكوكيز: {COOKIES_FILE}
+            """)
         finally:
             try:
                 driver.quit()
@@ -175,7 +226,6 @@ if session_access:
                 result_container.warning("ⓘ لم يتم العثور على جلسة محفوظة. يرجى محاولة الدخول المباشر ثم حفظ الجلسة.")
         except Exception as e:
             result_container.error(f"✗ خطأ أثناء تحميل الجلسة: {str(e)}")
-            st.code(str(e))
         finally:
             try:
                 driver.quit()
