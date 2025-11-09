@@ -1,13 +1,2 @@
-libgtk-3-0
-libx11-xcb1
-libdbus-glib-1-2
-libxt6
-libxcomposite1
-libxrender1
-libxi6
-libxcursor1
-libnss3
-libgconf-2-4
-libgles2
-libgl1
-libsm6
+streamlit==1.31.0
+playwright==1.42.0
