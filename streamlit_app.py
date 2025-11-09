@@ -1,16 +1,17 @@
 import streamlit as st
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service
+from webdriver_manager.firefox import GeckoDriverManager
 import os
 import json
 import time
 import stat
 
 """
-## Web Scraping على Streamlit Cloud - إصدار متوافق
+## Web Scraping باستخدام Firefox على Streamlit Cloud
 
-تم التحديث للتعامل مع مشاكل الاستيراد في بيئة Streamlit Cloud.
+حل بديل باستخدام Firefox (GeckoDriver) لتجنب مشاكل Chrome/Chromium.
 """
 
 # اسم الملف لحفظ الكوكيز
@@ -19,110 +20,94 @@ os.makedirs(os.path.dirname(COOKIES_FILE), exist_ok=True)
 
 @st.cache_resource
 def get_driver():
-    """تهيئة المتصفح مع التوافق مع جميع إصدارات webdriver_manager"""
-    st.info("جاري إعداد المتصفح...")
+    """تهيئة متصفح Firefox المتوافق مع Streamlit Cloud"""
+    st.info("جاري إعداد متصفح Firefox...")
     
+    # إعدادات Firefox للوضع الخفي والبيئات المقيدة
     options = Options()
-    options.add_argument("--headless=new")
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--disable-setuid-sandbox")
-    options.add_argument("--disable-software-rasterizer")
-    options.add_argument("--disable-background-networking")
-    options.add_argument("--disable-notifications")
-    options.add_argument("--mute-audio")
+    
+    # إعدادات خاصة بـ Firefox
+    options.set_preference("browser.download.folderList", 2)
+    options.set_preference("browser.download.manager.showWhenStarting", False)
+    options.set_preference("browser.download.dir", "/tmp")
+    options.set_preference("browser.helperApps.neverAsk.saveToDisk", "application/octet-stream")
+    options.set_preference("devtools.jsonview.enabled", False)
     
     try:
-        # المحاولة الأولى: إعداد متوافق مع الإصدارات الحديثة
-        from webdriver_manager.chrome import ChromeDriverManager
-        from webdriver_manager.core.os_manager import ChromeType
-        
-        # إنشاء السائق باستخدام WebDriverManager
-        driver_path = ChromeDriverManager(chrome_type=ChromeType.CHROMIUM).install()
+        # المحاولة الأولى: استخدام WebDriverManager لـ Firefox
+        st.info("جاري تحميل GeckoDriver باستخدام WebDriverManager...")
+        driver_path = GeckoDriverManager().install()
         
         # ضمان أذونات التنفيذ
         if os.path.exists(driver_path):
             current_permissions = os.stat(driver_path).st_mode
             os.chmod(driver_path, current_permissions | stat.S_IEXEC)
-            st.success(f"✓ تم تعيين أذونات التنفيذ لـ chromedriver")
+            st.success(f"✓ تم تعيين أذونات التنفيذ لـ geckodriver")
         
         service = Service(executable_path=driver_path)
-        driver = webdriver.Chrome(service=service, options=options)
-        st.success("✓ تم تشغيل المتصفح بنجاح")
+        driver = webdriver.Firefox(service=service, options=options)
+        st.success("✓ تم تشغيل Firefox بنجاح")
         return driver
         
-    except ImportError:
-        st.warning("⚠️ إصدار قديم من webdriver_manager. جاري المحاولة بطريقة بديلة...")
+    except Exception as e1:
+        st.warning(f"⚠️ فشل المحاولة الأولى: {str(e1)}")
         
         try:
-            # المحاولة الثانية: استخدام إصدار قديم من webdriver_manager
-            from webdriver_manager.chrome import ChromeDriverManager
+            # المحاولة الثانية: استخدام مسار GeckoDriver الافتراضي في Streamlit Cloud
+            st.info("جاري المحاولة باستخدام المسار الافتراضي لـ Firefox...")
             
-            driver_path = ChromeDriverManager().install()
+            # مسارات Firefox المحتملة في Streamlit Cloud
+            firefox_path = None
+            driver_path = None
             
-            if os.path.exists(driver_path):
-                current_permissions = os.stat(driver_path).st_mode
-                os.chmod(driver_path, current_permissions | stat.S_IEXEC)
+            possible_firefox_paths = [
+                "/usr/bin/firefox",
+                "/usr/bin/firefox-esr",
+                "/snap/bin/firefox"
+            ]
             
-            service = Service(executable_path=driver_path)
-            driver = webdriver.Chrome(service=service, options=options)
-            st.success("✓ تم تشغيل المتصفح باستخدام إصدار قديم من webdriver_manager")
+            possible_driver_paths = [
+                "/usr/bin/geckodriver",
+                "/usr/local/bin/geckodriver",
+                "/snap/bin/geckodriver"
+            ]
+            
+            for path in possible_firefox_paths:
+                if os.path.exists(path):
+                    firefox_path = path
+                    break
+            
+            for path in possible_driver_paths:
+                if os.path.exists(path):
+                    driver_path = path
+                    break
+            
+            if firefox_path:
+                options.binary_location = firefox_path
+                st.success(f"✓ تم العثور على Firefox في: {firefox_path}")
+            else:
+                st.warning("ⓘ لم يتم العثور على Firefox، سيتم استخدام الافتراضي")
+            
+            if driver_path:
+                service = Service(executable_path=driver_path)
+                st.success(f"✓ تم العثور على geckodriver في: {driver_path}")
+            else:
+                service = Service()
+            
+            driver = webdriver.Firefox(service=service, options=options)
+            st.success("✓ تم تشغيل Firefox باستخدام المسارات الافتراضية")
             return driver
             
-        except Exception as e:
-            st.error(f"✗ فشل المحاولة الثانية: {str(e)}")
-            
-            try:
-                # المحاولة الثالثة: استخدام المسارات الافتراضية
-                st.info("جاري المحاولة باستخدام المسارات الافتراضية لـ Streamlit Cloud...")
-                
-                # مسارات Chromium الافتراضية في Streamlit Cloud
-                chrome_path = None
-                driver_path = None
-                
-                # البحث عن chromium-browser
-                possible_chrome_paths = [
-                    "/usr/bin/chromium-browser",
-                    "/usr/bin/chromium",
-                    "/snap/bin/chromium"
-                ]
-                
-                for path in possible_chrome_paths:
-                    if os.path.exists(path):
-                        chrome_path = path
-                        break
-                
-                # البحث عن chromedriver
-                possible_driver_paths = [
-                    "/usr/bin/chromedriver",
-                    "/usr/local/bin/chromedriver",
-                    "/snap/bin/chromedriver"
-                ]
-                
-                for path in possible_driver_paths:
-                    if os.path.exists(path):
-                        driver_path = path
-                        break
-                
-                if chrome_path:
-                    options.binary_location = chrome_path
-                    st.success(f"✓ تم العثور على Chromium في: {chrome_path}")
-                
-                if driver_path:
-                    service = Service(executable_path=driver_path)
-                else:
-                    service = Service()
-                
-                driver = webdriver.Chrome(service=service, options=options)
-                st.success("✓ تم تشغيل المتصفح باستخدام المسارات الافتراضية")
-                return driver
-                
-            except Exception as e3:
-                st.error(f"✗ فشلت جميع المحاولات: {str(e3)}")
-                st.error("يرجى التحقق من إعدادات التطبيق وملف requirements.txt")
-                raise
+        except Exception as e2:
+            st.error(f"✗ فشلت جميع المحاولات: {str(e2)}")
+            st.error("يرجى التحقق من إعدادات التطبيق")
+            raise
 
 def save_cookies_to_file(driver, filename=COOKIES_FILE):
     """تحفظ الكوكيز الحالية من المتصفح إلى ملف محلي."""
@@ -150,11 +135,12 @@ def load_cookies_from_file(driver, base_url, filename=COOKIES_FILE):
         time.sleep(2)
         
         success_count = 0
+        failed_count = 0
         for cookie in cookies:
             try:
-                # إزالة الخصائص التي قد تسبب مشاكل
-                for key in ['expiry', 'sameSite', 'secure']:
-                    cookie.pop(key, None)
+                # معالجة الكوكيز لـ Firefox
+                cookie.pop('expiry', None)
+                cookie.pop('sameSite', None)
                 
                 # ضمان وجود domain صالح
                 if 'domain' not in cookie:
@@ -164,32 +150,36 @@ def load_cookies_from_file(driver, base_url, filename=COOKIES_FILE):
                 driver.add_cookie(cookie)
                 success_count += 1
             except Exception as e:
+                failed_count += 1
                 st.warning(f"⚠️ لم يتم تحميل كوكي: {cookie.get('name', 'غير معروف')} - {str(e)}")
         
         driver.refresh()
         time.sleep(3)
         
-        st.success(f"✓ تم تحميل {success_count} كوكي بنجاح من {filename}")
+        if success_count > 0:
+            st.success(f"✓ تم تحميل {success_count} كوكي بنجاح من {filename}")
+            if failed_count > 0:
+                st.warning(f"⚠️ فشل تحميل {failed_count} كوكي")
         return True
     except Exception as e:
         st.error(f"✗ فشل تحميل الكوكيز: {str(e)}")
         return False
 
 # --- الواجهة الرئيسية ---
-st.title("مدير جلسات التصفح")
+st.title("مدير جلسات Firefox")
 
 col1, col2 = st.columns(2)
 
 with col1:
-    direct_access = st.button("🖥️ الدخول المباشر إلى المتصفح", use_container_width=True, 
-                             help="افتح متصفح جديد بدون استخدام أي جلسات محفوظة")
+    direct_access = st.button("🦊 الدخول المباشر إلى Firefox", use_container_width=True, 
+                             help="افتح Firefox جديد بدون استخدام أي جلسات محفوظة")
 
 with col2:
     session_access = st.button("🍪 استخدام الجلسة المحفوظة", use_container_width=True,
                               help="استخدم الجلسة المحفوظة مسبقًا (إذا كانت متوفرة)")
 
 # --- الإعدادات ---
-with st.expander("⚙️ الإعدادات"):
+with st.expander("⚙️ إعدادات Firefox"):
     site_url = st.text_input("رابط الموقع", "https://www.google.com", key="site_url")
     
     if st.button("🗑️ مسح الجلسة المحفوظة"):
@@ -209,7 +199,7 @@ source_container = st.empty()
 
 # --- الدخول المباشر ---
 if direct_access:
-    with st.spinner("جاري تشغيل المتصفح..."):
+    with st.spinner("جاري تشغيل Firefox..."):
         try:
             driver = get_driver()
             driver.get(site_url)
