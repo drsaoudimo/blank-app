@@ -6,17 +6,18 @@ import os
 from urllib.parse import urljoin, urlparse
 import json
 import re
+import chardet
 
 # إعدادات الجلسة
 SESSION_DIR = "/tmp/desktop_browser"
 os.makedirs(SESSION_DIR, exist_ok=True)
 
-# تثبيت CSS لمتصفح ديسكتوب عالي الجودة
+# تثبيت CSS مع دعم كامل للغة العربية والحروف الخاصة
 st.markdown("""
 <style>
-    /* إعادة ضبط عام */
-    .main {
-        padding: 0 !important;
+    /* إعدادات الخطوط العالمية */
+    * {
+        font-family: 'Segoe UI', 'Tahoma', 'Geneva', 'Verdana', 'Arial', sans-serif !important;
     }
     
     /* متصفح الديسكتوب */
@@ -30,7 +31,7 @@ st.markdown("""
         box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         position: relative;
         overflow: hidden;
-        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif !important;
     }
     
     /* شريط العنوان */
@@ -99,10 +100,6 @@ st.markdown("""
         border-color: #a0a0a0;
     }
     
-    .toolbar-btn:active {
-        background: #e8e8e8;
-    }
-    
     .url-container {
         flex: 1;
         display: flex;
@@ -118,11 +115,8 @@ st.markdown("""
         padding: 6px 12px;
         font-size: 13px;
         outline: none;
-    }
-    
-    .url-bar:focus {
-        border-color: #0078d4;
-        box-shadow: 0 0 0 1px #0078d4;
+        direction: ltr;
+        text-align: left;
     }
     
     .security-badge {
@@ -181,46 +175,34 @@ st.markdown("""
         font-weight: 500;
     }
     
-    .tab-close {
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: #888;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 9px;
-        cursor: pointer;
-        opacity: 0.7;
-    }
-    
-    .tab-close:hover {
-        opacity: 1;
-    }
-    
-    .new-tab-btn {
-        background: transparent;
-        border: none;
-        padding: 8px 12px;
-        font-size: 16px;
-        cursor: pointer;
-        color: #666;
-    }
-    
     /* منطقة المحتوى */
     .content-area {
         height: calc(100% - 110px);
         background: white;
         position: relative;
-        overflow: hidden;
+        overflow: auto;
     }
     
     .browser-content {
         width: 100%;
-        height: 100%;
-        border: none;
+        min-height: 100%;
         background: white;
+    }
+    
+    /* تحسينات الترميز */
+    .unicode-content {
+        font-family: 'Segoe UI', 'Tahoma', 'Arial', 'DejaVu Sans', sans-serif !important;
+        line-height: 1.6;
+    }
+    
+    .arabic-text {
+        direction: rtl;
+        text-align: right;
+        font-family: 'Segoe UI', 'Tahoma', 'Arial', 'Times New Roman', serif !important;
+    }
+    
+    .european-text {
+        font-family: 'Segoe UI', 'Tahoma', 'Arial', 'DejaVu Sans', sans-serif !important;
     }
     
     /* شريط الحالة */
@@ -234,119 +216,19 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
     }
-    
-    /* تحسينات للمحتوى */
-    .website-content {
-        width: 100%;
-        min-height: 100%;
-        padding: 20px;
-        background: white;
-        box-sizing: border-box;
-    }
-    
-    .content-frame {
-        width: 100%;
-        height: 100%;
-        border: none;
-    }
-    
-    /* التحميل والرسائل */
-    .loading-indicator {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100%;
-        flex-direction: column;
-        gap: 15px;
-        background: white;
-    }
-    
-    .spinner {
-        width: 32px;
-        height: 32px;
-        border: 3px solid #f3f3f3;
-        border-top: 3px solid #0078d4;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-    
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    
-    .error-message {
-        background: #fef2f2;
-        border: 1px solid #fecaca;
-        color: #dc2626;
-        padding: 20px;
-        border-radius: 6px;
-        text-align: center;
-        margin: 20px;
-    }
-    
-    .success-message {
-        background: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        color: #16a34a;
-        padding: 15px;
-        border-radius: 6px;
-        margin: 10px;
-    }
-    
-    /* شريط التقدم */
-    .progress-bar {
-        height: 3px;
-        background: linear-gradient(90deg, #0078d4, #00b294);
-        width: 0%;
-        transition: width 0.3s ease;
-        position: absolute;
-        top: 0;
-        left: 0;
-        z-index: 1000;
-    }
-    
-    /* تحسينات للاستجابة */
-    @media (max-width: 1200px) {
-        .desktop-browser {
-            height: 70vh;
-        }
-    }
-    
-    @media (max-width: 768px) {
-        .desktop-browser {
-            height: 65vh;
-        }
-        
-        .toolbar {
-            padding: 4px 8px;
-            height: 36px;
-        }
-        
-        .toolbar-btn {
-            padding: 4px 8px;
-            font-size: 11px;
-        }
-        
-        .browser-tab {
-            min-width: 120px;
-            padding: 6px 12px;
-        }
-    }
 </style>
 """, unsafe_allow_html=True)
 
-class ProfessionalDesktopBrowser:
+class UnicodeDesktopBrowser:
     def __init__(self):
         self.session = requests.Session()
-        # User Agent حديث لمتصفح الديسكتوب
+        # User Agent مع دعم Unicode
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9,ar;q=0.8,fr;q=0.7,de;q=0.6,es;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
         })
         self.tabs = [{
             "id": 1, 
@@ -355,15 +237,64 @@ class ProfessionalDesktopBrowser:
             "favicon": "🌐", 
             "content": "", 
             "status": "active",
-            "loading": False
+            "loading": False,
+            "encoding": "utf-8"
         }]
         self.active_tab = 1
         self.history = []
         self.future = []
-        self.loading_progress = 0
         
+    def detect_encoding(self, content):
+        """كشف الترميز التلقائي للمحتوى"""
+        try:
+            # استخدام chardet للكشف التلقائي عن الترميز
+            detected = chardet.detect(content)
+            encoding = detected.get('encoding', 'utf-8')
+            confidence = detected.get('confidence', 0)
+            
+            # إذا كانت الثقة منخفضة، نستخدم UTF-8 كافتراضي
+            if confidence < 0.7:
+                encoding = 'utf-8'
+            
+            # تحويل الترميزات المشابهة إلى القياسية
+            encoding_map = {
+                'iso-8859-1': 'windows-1252',
+                'iso-8859-2': 'windows-1250',
+                'iso-8859-6': 'windows-1256',  # للعربية
+                'iso-8859-8': 'windows-1255',  # للعبرية
+            }
+            
+            return encoding_map.get(encoding.lower(), encoding).lower()
+        except:
+            return 'utf-8'
+    
+    def convert_to_unicode(self, content, encoding):
+        """تحويل المحتوى إلى Unicode"""
+        try:
+            if encoding.lower() == 'utf-8':
+                return content.decode('utf-8', errors='replace')
+            else:
+                # محاولة التحويل من الترميز المحدد
+                try:
+                    return content.decode(encoding, errors='replace')
+                except:
+                    # إذا فشل، نجرب ترميزات بديلة
+                    for alt_encoding in ['windows-1256', 'iso-8859-6', 'windows-1252', 'latin-1']:
+                        try:
+                            return content.decode(alt_encoding, errors='replace')
+                        except:
+                            continue
+                    # إذا فشلت جميع المحاولات، نستخدم UTF-8 مع استبدال الأخطاء
+                    return content.decode('utf-8', errors='replace')
+        except Exception as e:
+            # كملاذ أخير، نعيد النص كما هو
+            try:
+                return str(content, errors='replace')
+            except:
+                return "تعذر تحويل المحتوى إلى Unicode"
+    
     def navigate_to(self, url, tab_id=None):
-        """التنقل إلى رابط جديد مع ضمان الجودة"""
+        """التنقل إلى رابط جديد مع دعم Unicode"""
         if not url or url.strip() == "":
             return False, "الرابط فارغ"
             
@@ -375,7 +306,6 @@ class ProfessionalDesktopBrowser:
         if not clean_url.startswith(('http://', 'https://')):
             clean_url = 'https://' + clean_url
             
-        # التحقق من صحة الرابط
         try:
             parsed = urlparse(clean_url)
             if not parsed.netloc:
@@ -401,17 +331,15 @@ class ProfessionalDesktopBrowser:
                 })
                 self.future.clear()
         
-        # محاكاة شريط التقدم
-        self.simulate_loading()
-        
         # جلب المحتوى
-        success, content = self.fetch_page_content(clean_url)
+        success, content, encoding = self.fetch_page_content(clean_url)
         
         # تحديث علامة التبويب
         for tab in self.tabs:
             if tab['id'] == tab_id:
                 tab['loading'] = False
                 tab['content'] = content
+                tab['encoding'] = encoding
                 if success:
                     tab['title'] = self.extract_page_title(content) or parsed.netloc
                 else:
@@ -420,35 +348,40 @@ class ProfessionalDesktopBrowser:
                 
         return success, "تم التحميل بنجاح" if success else content
     
-    def simulate_loading(self):
-        """محاكاة شريط تقدم التحميل"""
-        self.loading_progress = 0
-        # في تطبيق حقيقي، يمكن استخدام مؤشر تقدم حقيقي
-    
     def fetch_page_content(self, url):
-        """جلب محتوى الصفحة بجودة عالية"""
+        """جلب محتوى الصفحة مع دعم Unicode"""
         try:
+            # جلب المحتوى كـ bytes
             response = self.session.get(url, timeout=15, allow_redirects=True)
             response.raise_for_status()
             
-            # التحقق من نوع المحتوى
-            content_type = response.headers.get('content-type', '').lower()
-            if 'text/html' not in content_type:
-                return False, "هذا النوع من المحتوى غير مدعوم"
-                
-            return True, response.text
+            # كشف الترميز
+            encoding = self.detect_encoding(response.content)
+            
+            # إذا كان الترميز معروفاً في رأس الاستجابة، نستخدمه
+            if response.encoding:
+                encoding = response.encoding
+            
+            # تحويل المحتوى إلى Unicode
+            content = self.convert_to_unicode(response.content, encoding)
+            
+            return True, content, encoding
             
         except requests.exceptions.Timeout:
-            return False, "انتهت مهلة الاتصال"
+            error_msg = "⏰ انتهت مهلة الاتصال"
+            return False, error_msg, 'utf-8'
         except requests.exceptions.ConnectionError:
-            return False, "تعذر الاتصال بالخادم"
+            error_msg = "🔌 تعذر الاتصال بالخادم"
+            return False, error_msg, 'utf-8'
         except requests.exceptions.HTTPError as e:
-            return False, f"خطأ HTTP: {e.response.status_code}"
+            error_msg = f"🌐 خطأ HTTP: {e.response.status_code}"
+            return False, error_msg, 'utf-8'
         except Exception as e:
-            return False, f"خطأ غير متوقع: {str(e)}"
+            error_msg = f"❌ خطأ غير متوقع: {str(e)}"
+            return False, error_msg, 'utf-8'
     
     def extract_page_title(self, html_content):
-        """استخراج عنوان الصفحة بدقة"""
+        """استخراج عنوان الصفحة مع دعم Unicode"""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             title = soup.find('title')
@@ -464,15 +397,25 @@ class ProfessionalDesktopBrowser:
         except:
             return None
     
-    def process_content_for_display(self, html_content, base_url):
-        """معالجة المحتوى لعرض تفاعلي عالي الجودة"""
+    def process_content_for_display(self, html_content, base_url, encoding):
+        """معالجة المحتوى لعرض Unicode"""
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # إضافة meta charset لضمان عرض Unicode بشكل صحيح
+            meta_charset = soup.new_tag('meta', charset='UTF-8')
+            if soup.head:
+                soup.head.insert(0, meta_charset)
+            else:
+                # إذا لم يكن هناك head، ننشئ واحداً
+                head = soup.new_tag('head')
+                head.append(meta_charset)
+                soup.insert(0, head)
             
             # إضافة base href لضمان عمل الروابط
             base_tag = soup.new_tag('base', href=base_url)
             if soup.head:
-                soup.head.insert(0, base_tag)
+                soup.head.append(base_tag)
             
             # معالجة جميع الروابط لجعلها قابلة للنقر
             for link in soup.find_all('a', href=True):
@@ -498,24 +441,17 @@ class ProfessionalDesktopBrowser:
                 img['style'] = 'max-width: 100%; height: auto;'
                 img['loading'] = 'lazy'
             
-            # تحسين النماذج
-            for form in soup.find_all('form'):
-                form['onsubmit'] = '''
-                event.preventDefault();
-                window.parent.postMessage({
-                    type: 'BROWSER_FORM_SUBMIT',
-                    formData: Object.fromEntries(new FormData(this)),
-                    action: this.action,
-                    method: this.method
-                }, '*');
-                return false;
-                '''
-            
-            # إضافة CSS لتحسين العرض
+            # إضافة CSS شامل لدعم Unicode
             style_tag = soup.new_tag('style')
             style_tag.string = """
+                /* دعم Unicode شامل */
+                * {
+                    font-family: 'Segoe UI', 'Tahoma', 'Arial', 'DejaVu Sans', sans-serif !important;
+                    unicode-bidi: embed;
+                }
+                
                 body {
-                    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+                    font-family: 'Segoe UI', 'Tahoma', 'Arial', 'DejaVu Sans', sans-serif !important;
                     line-height: 1.6;
                     margin: 0;
                     padding: 20px;
@@ -523,45 +459,77 @@ class ProfessionalDesktopBrowser:
                     background: white;
                     max-width: 100%;
                     overflow-x: hidden;
+                    unicode-bidi: embed;
                 }
-                * {
-                    box-sizing: border-box;
+                
+                /* دعم اللغة العربية */
+                [dir="rtl"], .arabic, :lang(ar) {
+                    direction: rtl !important;
+                    text-align: right !important;
+                    font-family: 'Segoe UI', 'Tahoma', 'Arial', 'Times New Roman', serif !important;
                 }
+                
+                /* دعم الحروف الأوروبية */
+                .latin, :lang(fr), :lang(de), :lang(es), :lang(it) {
+                    font-family: 'Segoe UI', 'Tahoma', 'Arial', 'DejaVu Sans', sans-serif !important;
+                }
+                
+                /* تحسين عرض النصوص */
+                p, div, span, li, td, th {
+                    unicode-bidi: embed;
+                    line-height: 1.6;
+                }
+                
+                /* الروابط */
                 a {
                     color: #0066cc;
                     text-decoration: underline;
                     cursor: pointer;
+                    unicode-bidi: embed;
                 }
+                
                 a:hover {
                     color: #004499;
                     text-decoration: none;
                 }
+                
+                /* الصور */
                 img {
                     max-width: 100%;
                     height: auto;
                     border-radius: 4px;
                 }
+                
+                /* الجداول */
                 table {
                     width: 100%;
                     border-collapse: collapse;
                     margin: 10px 0;
+                    unicode-bidi: embed;
                 }
+                
                 table, th, td {
                     border: 1px solid #ddd;
                 }
+                
                 th, td {
                     padding: 8px 12px;
                     text-align: left;
+                    unicode-bidi: embed;
                 }
+                
                 th {
                     background: #f5f5f5;
                 }
+                
+                /* النماذج */
                 form {
                     background: #f8f9fa;
                     padding: 15px;
                     border-radius: 6px;
                     margin: 10px 0;
                 }
+                
                 input, textarea, select {
                     width: 100%;
                     padding: 8px 12px;
@@ -570,6 +538,7 @@ class ProfessionalDesktopBrowser:
                     border-radius: 4px;
                     font-family: inherit;
                 }
+                
                 button {
                     background: #0078d4;
                     color: white;
@@ -579,31 +548,64 @@ class ProfessionalDesktopBrowser:
                     cursor: pointer;
                     margin: 5px;
                 }
-                button:hover {
-                    background: #106ebe;
-                }
+                
+                /* تحسينات للاستجابة */
                 @media (max-width: 768px) {
                     body {
                         padding: 15px;
                         font-size: 14px;
                     }
                 }
+                
+                /* ضمان عرض جميع الرموز */
+                .unicode-fallback {
+                    font-family: 'Segoe UI Symbol', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif !important;
+                }
             """
             if soup.head:
                 soup.head.append(style_tag)
+            
+            # إضافة فئة unicode للجسم
+            if soup.body:
+                soup.body['class'] = soup.body.get('class', []) + ['unicode-content']
             
             return str(soup)
             
         except Exception as e:
             return f"""
-            <div class="error-message">
-                <h3>⚠️ خطأ في معالجة المحتوى</h3>
-                <p>تعذر معالجة الصفحة للعرض التفاعلي.</p>
-                <p><strong>الخطأ:</strong> {str(e)}</p>
-                <button onclick="window.location.reload()" style="background: #0078d4; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 10px;">
-                    إعادة تحميل الصفحة
-                </button>
-            </div>
+            <!DOCTYPE html>
+            <html dir="ltr">
+            <head>
+                <meta charset="UTF-8">
+                <title>خطأ في المعالجة</title>
+                <style>
+                    body {{ 
+                        font-family: 'Segoe UI', Tahoma, sans-serif;
+                        padding: 20px;
+                        line-height: 1.6;
+                        color: #242424;
+                    }}
+                    .error {{ 
+                        background: #fef2f2;
+                        border: 1px solid #fecaca;
+                        color: #dc2626;
+                        padding: 20px;
+                        border-radius: 6px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="error">
+                    <h3>⚠️ خطأ في معالجة المحتوى</h3>
+                    <p>تعذر معالجة الصفحة للعرض التفاعلي.</p>
+                    <p><strong>الخطأ:</strong> {str(e)}</p>
+                    <p><strong>الترميز:</strong> {encoding}</p>
+                    <button onclick="window.location.reload()" style="background: #0078d4; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+                        إعادة تحميل الصفحة
+                    </button>
+                </div>
+            </body>
+            </html>
             """
     
     def add_tab(self, url=""):
@@ -616,7 +618,8 @@ class ProfessionalDesktopBrowser:
             "favicon": "🌐",
             "content": "",
             "status": "active",
-            "loading": False
+            "loading": False,
+            "encoding": "utf-8"
         })
         self.active_tab = new_tab_id
         return new_tab_id
@@ -649,7 +652,7 @@ class ProfessionalDesktopBrowser:
 
 # تهيئة المتصفح
 if 'desktop_browser' not in st.session_state:
-    st.session_state.desktop_browser = ProfessionalDesktopBrowser()
+    st.session_state.desktop_browser = UnicodeDesktopBrowser()
 
 # JavaScript للتفاعل
 browser_js = """
@@ -658,9 +661,10 @@ browser_js = """
 window.addEventListener('message', function(event) {
     if (event.data.type === 'BROWSER_NAVIGATE') {
         // إرسال طلب التنقل إلى Streamlit
+        const url = event.data.url;
         window.parent.postMessage({
             type: 'streamlit:setComponentValue',
-            value: event.data.url
+            value: url
         }, '*');
     }
 });
@@ -673,18 +677,33 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// التعامل مع النماذج
-document.addEventListener('submit', function(e) {
-    if (e.target.tagName === 'FORM' && e.target.onsubmit) {
-        e.preventDefault();
-        e.target.onsubmit(e);
-    }
-});
+// كشف اللغة وتطبيق التنسيق المناسب
+function detectLanguageAndApplyStyles() {
+    document.querySelectorAll('p, div, span, h1, h2, h3, h4, h5, h6').forEach(element => {
+        const text = element.textContent || element.innerText;
+        
+        // كشف العربية
+        if (/[\u0600-\u06FF]/.test(text)) {
+            element.style.direction = 'rtl';
+            element.style.textAlign = 'right';
+            element.classList.add('arabic-text');
+        }
+        
+        // كشف الحروف الأوروبية الخاصة
+        if (/[éèêëïîíìôöóòûüùúÿýñç]/.test(text)) {
+            element.classList.add('european-text');
+        }
+    });
+}
+
+// تطبيق الكشف عند تحميل الصفحة
+document.addEventListener('DOMContentLoaded', detectLanguageAndApplyStyles);
+setTimeout(detectLanguageAndApplyStyles, 1000);
 </script>
 """
 
 # واجهة المستخدم الرئيسية
-st.title("🖥️ متصفح ديسكتوب محترف")
+st.title("🖥️ متصفح ديسكتوب - دعم Unicode كامل")
 
 # شريط التحكم العلوي
 col1, col2, col3, col4, col5 = st.columns([1, 1, 4, 1, 1])
@@ -724,9 +743,9 @@ with col3:
     if st.button("➤ انتقل", use_container_width=True) or (url_input and url_input != current_url):
         success, message = st.session_state.desktop_browser.navigate_to(url_input)
         if success:
-            st.success("تم تحميل الصفحة بنجاح")
+            st.success("✅ تم تحميل الصفحة بنجاح")
         else:
-            st.error(f"خطأ: {message}")
+            st.error(f"❌ {message}")
         st.rerun()
 
 with col4:
@@ -769,96 +788,143 @@ display_content = ""
 if active_tab:
     if active_tab['loading']:
         display_content = """
-        <div class="loading-indicator">
-            <div class="spinner"></div>
+        <div style="display: flex; justify-content: center; align-items: center; height: 200px; flex-direction: column; gap: 15px;">
+            <div style="width: 32px; height: 32px; border: 3px solid #f3f3f3; border-top: 3px solid #0078d4; border-radius: 50%; animation: spin 1s linear infinite;"></div>
             <p>جاري تحميل الصفحة...</p>
+            <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
         </div>
         """
     elif active_tab['content']:
         display_content = browser.process_content_for_display(
             active_tab['content'], 
-            active_tab['url']
+            active_tab['url'],
+            active_tab['encoding']
         )
     else:
         display_content = """
-        <div class="website-content">
-            <div style="text-align: center; padding: 80px 20px;">
+        <!DOCTYPE html>
+        <html dir="ltr">
+        <head>
+            <meta charset="UTF-8">
+            <title>متصفح ديسكتوب</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, sans-serif;
+                    padding: 40px 20px;
+                    text-align: center;
+                    line-height: 1.6;
+                    color: #242424;
+                }
+                .welcome {
+                    max-width: 800px;
+                    margin: 0 auto;
+                }
+                .feature-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 15px;
+                    margin: 30px 0;
+                }
+                .feature {
+                    background: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 8px;
+                    border: 1px solid #e9ecef;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="welcome">
                 <h1 style="color: #0078d4; font-size: 48px; margin-bottom: 20px;">🌐</h1>
                 <h2 style="color: #242424; margin-bottom: 15px;">مرحباً بك في المتصفح المحترف</h2>
                 <p style="color: #666; margin-bottom: 30px; font-size: 16px; line-height: 1.6;">
-                    أدخل عنوان URL في شريط العنوان أعلاه لبدء تصفح الإنترنت<br>
-                    استخدم علامات التبويب لفتح عدة صفحات في وقت واحد
+                    يدعم هذا المتصفح جميع لغات العالم والرموز الخاصة<br>
+                   包括中文、日本語、العربية、Français、Deutsch、Español等所有语言
                 </p>
                 
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; max-width: 800px; margin: 0 auto;">
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h3 style="color: #242424; margin-bottom: 10px;">🔍 تصفح سريع</h3>
-                        <p style="color: #666; font-size: 14px;">ابحث وانتقل لأي موقع بسهولة</p>
+                <div class="feature-grid">
+                    <div class="feature">
+                        <h3>🔤 دعم Unicode</h3>
+                        <p>يعرض جميع اللغات والرموز بشكل صحيح</p>
                     </div>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h3 style="color: #242424; margin-bottom: 10px;">📑 علامات متعددة</h3>
-                        <p style="color: #666; font-size: 14px;">افتح عدة صفحات معاً</p>
+                    <div class="feature">
+                        <h3>🌍 متعدد اللغات</h3>
+                        <p>يدعم العربية، الإنجليزية، الفرنسية، etc.</p>
                     </div>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #e9ecef;">
-                        <h3 style="color: #242424; margin-bottom: 10px;">⚡ أداء عالي</h3>
-                        <p style="color: #666; font-size: 14px;">تجربة تصفح سريعة وسلسة</p>
+                    <div class="feature">
+                        <h3>⚡ أداء عالي</h3>
+                        <p>تحميل سريع وعرض دقيق</p>
                     </div>
                 </div>
+                
+                <div style="margin-top: 30px; padding: 20px; background: #e7f3ff; border-radius: 8px;">
+                    <h4>🔍 جرب هذه المواقع للاختبار:</h4>
+                    <p style="margin: 10px 0;">
+                        <strong>العربية:</strong> aljazeera.net • alarabiya.net<br>
+                        <strong>Français:</strong> lemonde.fr • lefigaro.fr<br>
+                        <strong>中文:</strong> baidu.com • sina.com.cn<br>
+                        <strong>日本語:</strong> yahoo.co.jp • rakuten.co.jp
+                    </p>
+                </div>
             </div>
-        </div>
+        </body>
+        </html>
         """
 
 # بناء واجهة المتصفح الكاملة
 desktop_html = f"""
-<div class="desktop-browser">
-    <div class="progress-bar" style="width: {browser.loading_progress}%"></div>
-    
-    <div class="title-bar">
-        <div class="window-controls">
-            <div class="control-btn close-btn"></div>
-            <div class="control-btn minimize-btn"></div>
-            <div class="control-btn maximize-btn"></div>
-        </div>
-        <div class="window-title">{active_tab['title'] if active_tab else 'متصفح ديسكتوب'}</div>
-    </div>
-    
-    <div class="toolbar">
-        <button class="toolbar-btn" onclick="window.history.back()">◀ عودة</button>
-        <button class="toolbar-btn" onclick="window.history.forward()">▶ تقدم</button>
-        <button class="toolbar-btn" onclick="window.location.reload()">↻ إعادة تحميل</button>
-        
-        <div class="url-container">
-            <div class="security-badge">آمن</div>
-            <input type="text" class="url-bar" value="{active_tab['url'] if active_tab else ''}" readonly>
+<!DOCTYPE html>
+<html dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0;">
+    <div class="desktop-browser">
+        <div class="title-bar">
+            <div class="window-controls">
+                <div class="control-btn close-btn"></div>
+                <div class="control-btn minimize-btn"></div>
+                <div class="control-btn maximize-btn"></div>
+            </div>
+            <div class="window-title">{active_tab['title'] if active_tab else 'متصفح ديسكتوب - Unicode'}</div>
         </div>
         
-        <button class="toolbar-btn" onclick="window.parent.postMessage({{type: 'BROWSER_HOME'}}, '*')">🏠 رئيسية</button>
-    </div>
-    
-    <div class="tab-container">
-        {"".join([f'''
-        <div class="browser-tab {'active' if tab['id'] == browser.active_tab else ''}" 
-             onclick="window.parent.postMessage({{type: 'BROWSER_SWITCH_TAB', tabId: {tab['id']}}}, '*')">
-            <span class="tab-favicon">{tab['favicon']}</span>
-            <span class="tab-title">{tab['title']}</span>
-            <span class="tab-close" onclick="event.stopPropagation(); window.parent.postMessage({{type: 'BROWSER_CLOSE_TAB', tabId: {tab['id']}}}, '*')">×</span>
+        <div class="toolbar">
+            <button class="toolbar-btn" onclick="window.history.back()">◀ عودة</button>
+            <button class="toolbar-btn" onclick="window.history.forward()">▶ تقدم</button>
+            <button class="toolbar-btn" onclick="window.location.reload()">↻ إعادة تحميل</button>
+            
+            <div class="url-container">
+                <div class="security-badge">🔒 آمن</div>
+                <input type="text" class="url-bar" value="{active_tab['url'] if active_tab else ''}" readonly>
+            </div>
         </div>
-        ''' for tab in browser.tabs])}
-        <button class="new-tab-btn" onclick="window.parent.postMessage({{type: 'BROWSER_NEW_TAB'}}, '*')">+</button>
-    </div>
-    
-    <div class="content-area">
-        <div class="browser-content">
-            {display_content}
-            {browser_js}
+        
+        <div class="tab-container">
+            {"".join([f'''
+            <div class="browser-tab {'active' if tab['id'] == browser.active_tab else ''}" 
+                 onclick="window.parent.postMessage({{type: 'BROWSER_SWITCH_TAB', tabId: {tab['id']}}}, '*')">
+                <span class="tab-favicon">{tab['favicon']}</span>
+                <span class="tab-title">{tab['title']}</span>
+            </div>
+            ''' for tab in browser.tabs])}
+        </div>
+        
+        <div class="content-area">
+            <div class="browser-content">
+                {display_content}
+                {browser_js}
+            </div>
+        </div>
+        
+        <div class="status-bar">
+            <span>✅ Unicode مدعوم - {active_tab['encoding'] if active_tab else 'UTF-8'}</span>
+            <span>متصفح ديسكتوب متعدد اللغات</span>
         </div>
     </div>
-    
-    <div class="status-bar">
-        <span>مستعد</span>
-        <span>متصفح ديسكتوب محترف</span>
-    </div>
-</div>
+</body>
+</html>
 """
 
 # عرض المتصفح
@@ -866,90 +932,59 @@ st.components.v1.html(desktop_html, height=600, scrolling=True)
 
 # لوحة التحكم الجانبية
 with st.sidebar:
-    st.header("⚙️ لوحة التحكم")
+    st.header("⚙️ لوحة التحكم - Unicode")
     
-    st.subheader("🌐 مواقع سريعة")
-    quick_sites = [
-        ("Google", "https://www.google.com"),
-        ("Wikipedia", "https://www.wikipedia.org"),
-        ("GitHub", "https://www.github.com"),
-        ("Stack Overflow", "https://stackoverflow.com"),
-        ("YouTube", "https://www.youtube.com"),
-        ("Amazon", "https://www.amazon.com"),
-        ("Twitter", "https://twitter.com"),
-        ("LinkedIn", "https://www.linkedin.com")
+    st.subheader("🌐 مواقع اختبار Unicode")
+    test_sites = [
+        ("Al Jazeera (عربي)", "https://www.aljazeera.net"),
+        ("BBC Arabic (عربي)", "https://www.bbc.com/arabic"),
+        ("Le Monde (Français)", "https://www.lemonde.fr"),
+        ("Der Spiegel (Deutsch)", "https://www.spiegel.de"),
+        ("El País (Español)", "https://elpais.com"),
+        ("百度 (中文)", "https://www.baidu.com"),
+        ("Yahoo Japan (日本語)", "https://www.yahoo.co.jp"),
+        ("Wikipedia Multi", "https://www.wikipedia.org"),
     ]
     
-    for site_name, site_url in quick_sites:
-        if st.button(site_name, use_container_width=True, key=f"quick_{site_name}"):
+    for site_name, site_url in test_sites:
+        if st.button(site_name, use_container_width=True, key=f"test_{site_name}"):
             success, message = browser.navigate_to(site_url)
             if success:
-                st.success(f"تم الانتقال إلى {site_name}")
+                st.success(f"✅ تم الانتقال إلى {site_name}")
             else:
-                st.error(f"خطأ: {message}")
+                st.error(f"❌ {message}")
             st.rerun()
     
-    st.subheader("📚 سجل التصفح")
-    if browser.history:
-        for i, visit in enumerate(reversed(browser.history[-8:])):
-            display_title = visit['title'][:25] + "..." if len(visit['title']) > 25 else visit['title']
-            if st.button(f"📄 {display_title}", key=f"hist_{i}", use_container_width=True):
-                browser.navigate_to(visit['url'])
-                st.rerun()
-    else:
-        st.info("لا يوجد سجل تصفح بعد")
+    st.subheader("🔧 أدوات Unicode")
     
-    st.subheader("🔧 أدوات متقدمة")
+    if st.button("🔄 إعادة تعيين الترميز", use_container_width=True):
+        browser.session.headers.update({
+            'Accept-Charset': 'UTF-8, *'
+        })
+        st.success("تم إعادة تعيين إعدادات الترميز")
     
-    if st.button("🧹 مسح الذاكرة المؤقتة", use_container_width=True):
+    if st.button("🧹 تنظيف الذاكرة", use_container_width=True):
         browser.session.cookies.clear()
-        st.success("تم مسح الذاكرة المؤقتة")
+        import gc
+        gc.collect()
+        st.success("تم تنظيف الذاكرة")
     
-    if st.button("🗑️ مسح سجل التصفح", use_container_width=True):
-        browser.history.clear()
-        browser.future.clear()
-        st.success("تم مسح سجل التصفح")
-    
-    if st.button("🔄 إعادة تعيين المتصفح", use_container_width=True):
-        st.session_state.desktop_browser = ProfessionalDesktopBrowser()
-        st.success("تم إعادة تعيين المتصفح")
-        st.rerun()
-    
-    st.subheader("ℹ️ معلومات")
-    st.info("""
-    **مميزات المتصفح:**
-    
-    - ✅ تنقل كامل بين الصفحات
-    - 📑 علامات تبويب متعددة
-    - 🔍 بحث سريع ومباشر
-    - 🛡️ عرض آمن ومحمي
-    - ⚡ أداء عالي وسريع
-    - 💾 حفظ السجل والتاريخ
-    """)
-
-# معلومات إضافية
-with st.expander("📊 إحصائيات المتصفح"):
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("علامات التبويب", len(browser.tabs))
-    
-    with col2:
-        st.metric("الصفحات المزورة", len(browser.history))
-    
-    with col3:
-        st.metric("الصفحات القادمة", len(browser.future))
-    
-    with col4:
-        if active_tab:
-            domain = urlparse(active_tab['url']).netloc
-            st.metric("المجال الحالي", domain[:12] + "..." if len(domain) > 12 else domain)
+    st.subheader("ℹ️ معلومات الترميز")
+    if active_tab:
+        st.info(f"""
+        **معلومات الصفحة الحالية:**
+        
+        - 🔤 الترميز: {active_tab.get('encoding', 'غير معروف')}
+        - 🌐 العنوان: {active_tab['title']}
+        - 🔗 الرابط: {active_tab['url']}
+        - 📊 حجم المحتوى: {len(active_tab['content']) if active_tab['content'] else 0} حرف
+        """)
 
 # تذييل الصفحة
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p style='font-size: 16px; font-weight: bold; color: #0078d4;'>🖥️ متصفح ديسكتوب محترف</p>
-    <p style='font-size: 14px;'>تجربة تصفح حقيقية • أداء عالي • واجهة مستخدم متطورة</p>
+    <p style='font-size: 16px; font-weight: bold; color: #0078d4;'>🖥️ متصفح ديسكتوب - دعم Unicode كامل</p>
+    <p style='font-size: 14px;'>يدعم جميع اللغات: العربية • Français • Deutsch • Español • 中文 • 日本語 • Русский • और भी बहुत कुछ</p>
 </div>
 """, unsafe_allow_html=True)
