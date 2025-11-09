@@ -1,3 +1,10 @@
+# المكتبات الأساسية
 streamlit
-seleniumbase
+selenium
 webdriver-manager
+
+# مكتبة مساعدة لتنزيل chromedriver تلقائيًا
+# webdriver-manager (مذكورة أعلاه) تستخدم لتنزيل chromedriver تلقائيًا
+
+# مكتبة Chromium (اختياري، قد تحتاجها في بعض الأحيان على Streamlit Cloud)
+pychromeless
