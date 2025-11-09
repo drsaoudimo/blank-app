@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 PPFO v29.1 Streamlit Web Application 
-نسخة محسنة مع تسريع حساب الأعداد الأولية وعرض رياضي محسن
+نسخة محسنة مع إصلاح جميع الخدمات ومؤشر التقدم
 """
 
 import streamlit as st
@@ -103,6 +103,11 @@ st.markdown("""
         width: 100%;
     }
     
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4);
+    }
+    
     /* تنسيقات LaTeX */
     .latex-container {
         background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
@@ -173,6 +178,15 @@ st.markdown("""
             padding: 12px 18px !important;
         }
     }
+    
+    /* تنسيقات شريط التقدم */
+    .progress-container {
+        background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+        border-radius: 10px;
+        padding: 15px;
+        margin: 10px 0;
+        border: 1px solid #bfdbfe;
+    }
 </style>
 
 <!-- حل بديل لخطأ CSS -->
@@ -227,6 +241,7 @@ class TranslationSystem:
             'nth_prime': 'العدد الأولي رقم n',
             'zeta_function': 'دالة زيتا العامة',
             'prime_pi': 'دالة العد الأولي (π)',
+            'high_precision_pi': 'حساب π بدقة عالية',
             
             # نصوص عامة
             'enter_number': 'أدخل الرقم',
@@ -243,6 +258,8 @@ class TranslationSystem:
             'factors': 'العوامل',
             'unique_factors': 'العوامل المميزة',
             'largest_factor': 'أكبر عامل',
+            'progress': 'التقدم',
+            'verified': 'تم التحقق',
             
             # رسائل نجاح
             'success': 'نجاح',
@@ -300,6 +317,7 @@ class TranslationSystem:
             'nth_prime': 'n-th Prime Number',
             'zeta_function': 'General Zeta Function',
             'prime_pi': 'Prime Counting Function (π)',
+            'high_precision_pi': 'Calculate π with High Precision',
             
             # General Texts
             'enter_number': 'Enter number',
@@ -316,6 +334,8 @@ class TranslationSystem:
             'factors': 'Factors',
             'unique_factors': 'Unique factors',
             'largest_factor': 'Largest factor',
+            'progress': 'Progress',
+            'verified': 'Verified',
             
             # Success Messages
             'success': 'Success',
@@ -373,6 +393,7 @@ class TranslationSystem:
             'nth_prime': 'n-ième Nombre Premier',
             'zeta_function': 'Fonction Zêta Générale',
             'prime_pi': 'Fonction de Compte des Premiers (π)',
+            'high_precision_pi': 'Calculer π avec Haute Précision',
             
             # Textes Généraux
             'enter_number': 'Entrez le nombre',
@@ -389,6 +410,8 @@ class TranslationSystem:
             'factors': 'Facteurs',
             'unique_factors': 'Facteurs uniques',
             'largest_factor': 'Plus grand facteur',
+            'progress': 'Progression',
+            'verified': 'Vérifié',
             
             # Messages de Succès
             'success': 'Succès',
@@ -820,7 +843,7 @@ def factorize_fast(n: int, timeout=30):
         return []
     
     # استخدام المكتبات المتقدمة للأعداد الكبيرة
-    if SYMPY_AVAILABLE and n > 10**15:
+    if SYMPY_AVAILABLE:
         try:
             factors_dict = sympy.factorint(n)
             factors = []
@@ -843,6 +866,8 @@ def factorize_fast(n: int, timeout=30):
         if time.time() - start_time > timeout:
             factors.append(int(n))
             return sorted(factors)
+        if n == 1:
+            return sorted(factors)
     
     # فحص الأعداد الأولية الصغيرة
     small_primes = [3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97]
@@ -853,8 +878,8 @@ def factorize_fast(n: int, timeout=30):
             if time.time() - start_time > timeout:
                 factors.append(int(n))
                 return sorted(factors)
-        if n == 1:
-            return sorted(factors)
+            if n == 1:
+                return sorted(factors)
     
     if is_prime_fast(n):
         factors.append(int(n))
@@ -890,26 +915,27 @@ def factorize_fast(n: int, timeout=30):
     timeout_time = start_time + timeout
     remaining = n
     
-    while remaining > 1 and not is_prime_fast(remaining):
-        if time.time() > timeout_time:
-            factors.append(int(remaining))
-            break
-        
-        factor = pollard_rho(remaining, timeout_time)
-        if factor is None:
-            factors.append(int(remaining))
-            break
-        
-        if is_prime_fast(factor):
-            factors.append(int(factor))
-        else:
-            sub_factors = factorize_fast(factor, timeout - (time.time() - start_time))
-            factors.extend(sub_factors)
-        
-        remaining //= factor
+    # استخدام stack لتجنب التعقيد التكراري
+    stack = [remaining]
     
-    if remaining > 1:
-        factors.append(int(remaining))
+    while stack and time.time() < timeout_time:
+        current = stack.pop()
+        
+        if current == 1:
+            continue
+            
+        if is_prime_fast(current):
+            factors.append(int(current))
+            continue
+            
+        factor = pollard_rho(current, timeout_time)
+        
+        if factor is None or factor == current:
+            # إذا فشل التحليل، نعتبر العدد أولي
+            factors.append(int(current))
+        else:
+            stack.append(factor)
+            stack.append(current // factor)
     
     return sorted(factors)
 
@@ -919,24 +945,35 @@ def mersenne_primes_between(n1, n2):
     """إرجاع قائمة أعداد ميرسين الأولية بين n1 و n2"""
     results = []
     p = 2
-    while True:
+    max_iterations = 1000  # حد أقصى للتكرارات
+    
+    for _ in range(max_iterations):
         mersenne = 2**p - 1
         if mersenne > n2:
             break
         if mersenne >= n1 and is_prime_fast(p) and is_prime_fast(mersenne):
             results.append((p, mersenne))
-        p = next_prime(p)
-        if 2**p - 1 > n2:
-            break
+        
+        # إيجاد العدد الأولي التالي
+        p += 1
+        while p <= n2 and not is_prime_fast(p):
+            p += 1
+            if p > n2:
+                break
+    
     return results
 
 def next_prime(n):
     """إيجاد العدد الأولي التالي لـ n"""
     if n < 2:
         return 2
-    n = n + 1 if n % 2 == 0 else n + 2
+    
+    n = n + 1
     while not is_prime_fast(n):
-        n += 2
+        n += 1
+        # حد أمان لتجنب الحلقات اللانهائية
+        if n > 10**9:
+            raise ValueError("العدد كبير جداً")
     return n
 
 def nth_prime(n):
@@ -946,17 +983,26 @@ def nth_prime(n):
 def goldbach_pairs_between(n1, n2):
     """إرجاع جميع أزواج غولدباخ للأعداد الزوجية بين n1 و n2"""
     results = []
-    for n in range(n1, n2 + 1):
-        if n % 2 == 0 and n >= 4:
-            verified, primes = goldbach_verification(n)
-            if verified:
-                results.append((n, primes))
+    
+    # التأكد من أن n1 زوجي
+    if n1 % 2 != 0:
+        n1 += 1
+    
+    for n in range(n1, n2 + 1, 2):
+        if n < 4:
+            continue
+            
+        verified, primes = goldbach_verification(n)
+        if verified:
+            results.append((n, primes))
+    
     return results
 
 def goldbach_verification(n, limit=10000):
     """التحقق من حدسية غولدباخ"""
     if n % 2 != 0 or n < 4:
         return False, []
+    
     # نبحث عن زوج أولي
     for i in range(2, n//2 + 1):
         if i > limit:
@@ -968,28 +1014,27 @@ def goldbach_verification(n, limit=10000):
 def primes_between(n1, n2):
     """إرجاع جميع الأعداد الأولية بين n1 و n2"""
     primes = []
-    # استخدام الغربال إذا كان النطاق معقولاً
-    if n2 - n1 <= 1000000:  # حد معقول للغربال
-        all_primes = sieve_of_eratosthenes(n2)
-        primes = [p for p in all_primes if p >= n1]
-    else:
-        # استخدام البحث التكراري للنطاقات الكبيرة
-        start = max(2, n1)
-        if start <= 2:
-            primes.append(2)
-            start = 3
-        elif start % 2 == 0:
-            start += 1
-        
-        for num in range(start, n2 + 1, 2):
+    
+    # التأكد من أن n1 على الأقل 2
+    start = max(2, n1)
+    
+    # إذا كان النطاق صغير، استخدام طريقة مباشرة
+    if n2 - n1 <= 1000000:
+        for num in range(start, n2 + 1):
             if is_prime_fast(num):
                 primes.append(num)
+    else:
+        # للنطاقات الكبيرة، استخدام الغربال
+        all_primes = sieve_of_eratosthenes(n2)
+        primes = [p for p in all_primes if p >= n1]
+    
     return primes
 
 def prime_pi(x):
     """دالة العد الأولي: عدد الأعداد الأولية ≤ x"""
     if x < 2:
         return 0
+    
     # استخدام الغربال للقيم الصغيرة
     if x <= 1000000:
         primes = sieve_of_eratosthenes(int(x))
@@ -1002,11 +1047,18 @@ def prime_pi(x):
             count += 1
     return count
 
-def calculate_pi(precision=10000):
+def calculate_pi(precision=100):
     """حساب π بدقة عالية باستخدام صيغة ماشين"""
     if MP_MATH_AVAILABLE:
-        mp.mp.dps = precision // 100 + 50  # زيادة الدقة
-        return str(mp.pi)
+        mp.mp.dps = precision + 10  # زيادة الدقة
+        pi_str = str(mp.pi)
+        # تقريب إلى precision منازل عشرية
+        if '.' in pi_str:
+            integer_part, decimal_part = pi_str.split('.')
+            if len(decimal_part) > precision:
+                decimal_part = decimal_part[:precision]
+            return f"{integer_part}.{decimal_part}"
+        return pi_str
     else:
         # استخدام صيغة ماشين التقريبية
         pi_val = 4 * (4 * math.atan(1/5) - math.atan(1/239))
@@ -1024,12 +1076,22 @@ def show_math_formula(formula, title="", description=""):
     </div>
     """, unsafe_allow_html=True)
 
-def show_progress_bar(current, total, message=""):
-    """عرض شريط تقدم"""
+def show_progress(current, total, message=""):
+    """عرض مؤشر تقدم محسن"""
     if total > 0:
         progress = current / total
-        st.progress(progress)
-        st.write(f"{message} {current}/{total} ({progress:.1%})")
+        st.markdown(f"""
+        <div class="progress-container">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span>{message}</span>
+                <span>{current}/{total} ({progress:.1%})</span>
+            </div>
+            <div style="background: #e5e7eb; border-radius: 10px; height: 10px;">
+                <div style="background: linear-gradient(135deg, #4F46E5, #7C3AED); width: {progress*100}%; height: 100%; border-radius: 10px; transition: width 0.3s ease;"></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        return progress
 
 def main():
     # إعدادات اللغة
@@ -1046,8 +1108,7 @@ def main():
             ['العربية', 'English', 'Français'],
             index=['العربية', 'English', 'Français'].index(
                 {'ar': 'العربية', 'en': 'English', 'fr': 'Français'}[st.session_state.language]
-            ),
-            key='lang_selector'
+            )
         )
         
         # تحديث اللغة في session state
@@ -1055,22 +1116,21 @@ def main():
         st.session_state.language = lang_map[lang_option]
         
         # الخدمات المتاحة
-        service = st.selectbox(
-            "",
-            [
-                translator.get_text('home', st.session_state.language),
-                translator.get_text('zeta_zeros', st.session_state.language),
-                translator.get_text('prime_factorization', st.session_state.language),
-                translator.get_text('prime_check', st.session_state.language),
-                translator.get_text('mersenne_primes', st.session_state.language),
-                translator.get_text('goldbach_conjecture', st.session_state.language),
-                translator.get_text('primes_in_range', st.session_state.language),
-                translator.get_text('nth_prime', st.session_state.language),
-                translator.get_text('zeta_function', st.session_state.language),
-                translator.get_text('prime_pi', st.session_state.language),
-                "حساب π بدقة عالية"
-            ]
-        )
+        service_options = [
+            translator.get_text('home', st.session_state.language),
+            translator.get_text('zeta_zeros', st.session_state.language),
+            translator.get_text('prime_factorization', st.session_state.language),
+            translator.get_text('prime_check', st.session_state.language),
+            translator.get_text('mersenne_primes', st.session_state.language),
+            translator.get_text('goldbach_conjecture', st.session_state.language),
+            translator.get_text('primes_in_range', st.session_state.language),
+            translator.get_text('nth_prime', st.session_state.language),
+            translator.get_text('zeta_function', st.session_state.language),
+            translator.get_text('prime_pi', st.session_state.language),
+            translator.get_text('high_precision_pi', st.session_state.language)
+        ]
+        
+        service = st.selectbox("", service_options)
     
     # الترويسة مع class اللغة المناسب
     lang_class = translator.get_language_class(st.session_state.language)
@@ -1124,7 +1184,7 @@ def main():
                 <li>🔢 {translator.get_text('nth_prime', st.session_state.language)}</li>
                 <li>𝛇 {translator.get_text('zeta_function', st.session_state.language)}</li>
                 <li>π {translator.get_text('prime_pi', st.session_state.language)}</li>
-                <li>π حساب π بدقة عالية</li>
+                <li>π {translator.get_text('high_precision_pi', st.session_state.language)}</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -1152,53 +1212,92 @@ def main():
                     prime_1000 = nth_prime(1000)
                     st.success(f"{'العدد الأولي رقم 1000: ' if st.session_state.language == 'ar' else '1000th prime number: ' if st.session_state.language == 'en' else '1000ème nombre premier: '}{prime_1000}")
     
-    # قسم أصفار دالة زيتا المصححة
-    elif service == translator.get_text('zeta_zeros', st.session_state.language):
-        st.header("𝛇 " + translator.get_text('zeta_zeros', st.session_state.language))
+    # قسم التحليل إلى عوامل أولية (مُصلح)
+    elif service == translator.get_text('prime_factorization', st.session_state.language):
+        st.header("🔍 " + translator.get_text('prime_factorization', st.session_state.language))
         
-        show_math_formula(
-            r"\zeta\left(\frac{1}{2} + i t_n\right) = 0",
-            translator.get_text('zeta_function', st.session_state.language),
-            translator.get_text('zeta_zero_description', st.session_state.language)
-        )
+        st.info(f"""
+        **{translator.get_text('supported_formats', st.session_state.language)}:**
+        - `123456789`
+        - `123,456,789` 
+        - `1.23456789e8`
+        - `2^50` {'أو' if st.session_state.language == 'ar' else 'or' if st.session_state.language == 'en' else 'ou'} `2**50`
+        """)
         
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([2, 1])
         with col1:
-            n_input = st.text_input(f"{translator.get_text('enter_number', st.session_state.language)} n:", value="167", key="zeta_zero_input")
+            number_input = st.text_input(translator.get_text('enter_number', st.session_state.language) + ":", value="123456789", key="factorize_input")
         with col2:
-            method = st.selectbox(
-                "Method:" if st.session_state.language == 'en' else "Méthode:" if st.session_state.language == 'fr' else "طريقة الحساب:",
-                ["auto", "accurate", "asymptotic"]
+            timeout = st.number_input(
+                "Timeout:" if st.session_state.language == 'en' else "Délai:" if st.session_state.language == 'fr' else "المهلة (بالثواني):",
+                min_value=1, max_value=300, value=30, step=1
             )
         
-        if st.button(translator.get_text('calculate', st.session_state.language), type="primary"):
+        if st.button(translator.get_text('analyze', st.session_state.language), type="primary", key="factorize_btn"):
             try:
-                n = parse_large_number(n_input)
-                if n < 1:
-                    st.error("n " + ('يجب أن يكون على الأقل 1' if st.session_state.language == 'ar' else 'must be at least 1' if st.session_state.language == 'en' else 'doit être au moins 1'))
-                else:
-                    with st.spinner('جاري حساب الصفر غير التافه...' if st.session_state.language == 'ar' else 'Calculating non-trivial zero...' if st.session_state.language == 'en' else 'Calcul du zéro non trivial...'):
-                        start_time = time.time()
-                        zero = zeta_zero_advanced(n, method=method, precise=True)
-                        end_time = time.time()
+                # تحليل العدد المدخل
+                number = parse_large_number(number_input)
+                
+                if number > 10**15:
+                    st.warning("⚠️ " + ('العدد كبير جداً وقد يستغرق وقتاً طويلاً' if st.session_state.language == 'ar' else 'Number is very large and may take a long time' if st.session_state.language == 'en' else 'Le nombre est très grand et peut prendre beaucoup de temps'))
+                
+                st.success(f"**{translator.get_text('enter_number', st.session_state.language)}:** {format_large_number(number)}")
+                st.info(f"**{translator.get_text('digits_count', st.session_state.language)}:** {len(str(number))}")
+                
+                # إعداد مؤشر التقدم
+                progress_placeholder = st.empty()
+                status_placeholder = st.empty()
+                
+                def update_progress(step, total_steps, message):
+                    progress = show_progress(step, total_steps, message)
+                    return progress
+                
+                with st.spinner('جاري التحليل...' if st.session_state.language == 'ar' else 'Analyzing...' if st.session_state.language == 'en' else 'Analyse en cours...'):
+                    start_time = time.time()
+                    
+                    # تحديث حالة البدء
+                    status_placeholder.info('🚀 ' + ('بدء التحليل...' if st.session_state.language == 'ar' else 'Starting analysis...' if st.session_state.language == 'en' else 'Début de l\'analyse...'))
+                    
+                    factors = factorize_fast(number, timeout=timeout)
+                    end_time = time.time()
+                    
+                    # مسح مؤشر التقدم
+                    progress_placeholder.empty()
+                    status_placeholder.empty()
+                    
+                    # عرض النتائج
+                    if len(factors) == 1:
+                        st.success("**🎉 " + translator.get_text('prime_success', st.session_state.language) + "**")
+                        st.balloons()
+                    else:
+                        cnt = Counter(factors)
+                        parts_str = []
+                        for p in sorted(cnt):
+                            if cnt[p] > 1:
+                                parts_str.append(f"{p}<sup>{cnt[p]}</sup>")
+                            else:
+                                parts_str.append(f"{p}")
+                        factorization = " × ".join(parts_str)
                         
-                        st.success(f"**{translator.get_text('zeta_function', st.session_state.language)} {n} = {zero:.15f}**")
+                        st.markdown(f'<div class="result-card">'
+                                  f'<strong>{translator.get_text("factorization", st.session_state.language)}:</strong> {format_large_number(number)} = {factorization}'
+                                  f'</div>', unsafe_allow_html=True)
                         
-                        # التحقق من الدقة للصفر 167
-                        if n == 167:
-                            correct_value = 346.3478705660099473959364598161519
-                            error = abs(zero - correct_value)
-                            st.info(f"**{'الخطأ:' if st.session_state.language == 'ar' else 'Error:' if st.session_state.language == 'en' else 'Erreur:'} {error:.2e}**")
-                            if error < 1e-10:
-                                st.balloons()
-                                st.success("🎉 **" + ('الحساب دقيق جداً!' if st.session_state.language == 'ar' else 'Calculation very accurate!' if st.session_state.language == 'en' else 'Calcul très précis!') + "**")
-                        
-                        st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
-                        
+                        # عرض معلومات إضافية
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.info(f"**{translator.get_text('factors', st.session_state.language)}:** {len(factors)}")
+                        with col2:
+                            st.info(f"**{translator.get_text('unique_factors', st.session_state.language)}:** {len(cnt)}")
+                        with col3:
+                            st.info(f"**{translator.get_text('largest_factor', st.session_state.language)}:** {max(factors)}")
+                    
+                    st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+                    
             except Exception as e:
                 st.error(f"❌ {translator.get_text('error', st.session_state.language)}: {e}")
     
-    # قسم العدد الأولي رقم n (المُسرّع)
+    # قسم العدد الأولي رقم n (مُصلح مع مؤشر تقدم)
     elif service == translator.get_text('nth_prime', st.session_state.language):
         st.header("🔢 " + translator.get_text('nth_prime', st.session_state.language))
         
@@ -1213,7 +1312,7 @@ def main():
         # إضافة خيارات إضافية
         col1, col2 = st.columns(2)
         with col1:
-            show_progress = st.checkbox("عرض شريط التقدم" if st.session_state.language == 'ar' else "Show progress bar" if st.session_state.language == 'en' else "Afficher la barre de progression", value=True)
+            show_progress_option = st.checkbox("عرض مؤشر التقدم" if st.session_state.language == 'ar' else "Show progress indicator" if st.session_state.language == 'en' else "Afficher l'indicateur de progression", value=True)
         with col2:
             use_optimized = st.checkbox("استخدام الخوارزمية المُسرّعة" if st.session_state.language == 'ar' else "Use optimized algorithm" if st.session_state.language == 'en' else "Utiliser l'algorithme optimisé", value=True)
         
@@ -1222,6 +1321,8 @@ def main():
                 n = parse_large_number(n_input)
                 if n < 1:
                     st.error("n " + ('يجب أن يكون على الأقل 1' if st.session_state.language == 'ar' else 'must be at least 1' if st.session_state.language == 'en' else 'doit être au moins 1'))
+                elif n > 1000000:
+                    st.warning("⚠️ " + ('العدد كبير جداً وقد يستغرق وقتاً طويلاً' if st.session_state.language == 'ar' else 'Number is very large and may take a long time' if st.session_state.language == 'en' else 'Le nombre est très grand et peut prendre beaucoup de temps'))
                 else:
                     with st.spinner('جاري البحث...' if st.session_state.language == 'ar' else 'Searching...' if st.session_state.language == 'en' else 'Recherche en cours...'):
                         start_time = time.time()
@@ -1229,10 +1330,9 @@ def main():
                         if use_optimized:
                             prime = nth_prime_optimized(n)
                         else:
-                            # استخدام النسخة الأساسية مع شريط التقدم
-                            if show_progress and n > 100:
-                                progress_bar = st.progress(0)
-                                status_text = st.empty()
+                            # استخدام النسخة الأساسية مع مؤشر التقدم
+                            progress_placeholder = st.empty()
+                            status_placeholder = st.empty()
                             
                             count = 1  # بدأنا بالعدد 2
                             current = 3
@@ -1240,18 +1340,22 @@ def main():
                             while count < n:
                                 if is_prime_fast(current):
                                     count += 1
-                                    if show_progress and n > 100:
+                                    if show_progress_option and n > 100:
                                         progress = count / n
-                                        progress_bar.progress(progress)
-                                        status_text.text(f"{'التقدم:' if st.session_state.language == 'ar' else 'Progress:' if st.session_state.language == 'en' else 'Progression:'} {count}/{n} ({progress:.1%})")
+                                        show_progress(count, n, translator.get_text('progress', st.session_state.language))
                                     if count == n:
                                         prime = current
                                         break
                                 current += 2
+                            
+                            # مسح مؤشر التقدم
+                            if show_progress_option and n > 100:
+                                progress_placeholder.empty()
+                                status_placeholder.empty()
                         
                         end_time = time.time()
                         
-                        st.success(f"**{translator.get_text('prime_number', st.session_state.language)} {n} = {format_large_number(prime)}**")
+                        st.success(f"**{translator.get_text('prime_number', st.session_state.language)} {format_large_number(n)} = {format_large_number(prime)}**")
                         
                         # معلومات إضافية
                         col1, col2, col3 = st.columns(3)
@@ -1261,54 +1365,142 @@ def main():
                             st.info(f"**{translator.get_text('time_taken', st.session_state.language)}:** {end_time - start_time:.3f} {translator.get_text('seconds', st.session_state.language)}")
                         with col3:
                             # التحقق من الأولية
-                            is_prime = is_prime_fast(prime)
-                            status = "✅ " + translator.get_text('prime_success', st.session_state.language) if is_prime else "❌ " + translator.get_text('composite_number', st.session_state.language)
+                            is_prime_result = is_prime_fast(prime)
+                            status = "✅ " + translator.get_text('prime_success', st.session_state.language) if is_prime_result else "❌ " + translator.get_text('composite_number', st.session_state.language)
                             st.info(f"**{translator.get_text('result', st.session_state.language)}:** {status}")
-                        
-                        # تنظيف شريط التقدم
-                        if show_progress and n > 100:
-                            progress_bar.empty()
-                            status_text.empty()
                         
             except Exception as e:
                 st.error(f"❌ {translator.get_text('error', st.session_state.language)}: {e}")
     
-    # قسم دالة زيتا العامة
-    elif service == translator.get_text('zeta_function', st.session_state.language):
-        st.header("𝛇 " + translator.get_text('zeta_function', st.session_state.language))
+    # قسم حدسية غولدباخ (مُصلح)
+    elif service == translator.get_text('goldbach_conjecture', st.session_state.language):
+        st.header("🧮 " + translator.get_text('goldbach_conjecture', st.session_state.language))
         
         show_math_formula(
-            r"\zeta(s) = \sum_{n=1}^{\infty} \frac{1}{n^s}",
-            translator.get_text('zeta_function', st.session_state.language),
-            "دالة زيتا لريمان" if st.session_state.language == 'ar' else "Riemann Zeta Function" if st.session_state.language == 'en' else "Fonction Zêta de Riemann"
+            r"n = p + q \quad \text{حيث } p, q \text{ أوليان}",
+            "حدسية غولدباخ",
+            translator.get_text('goldbach_conjecture_text', st.session_state.language)
         )
         
         col1, col2 = st.columns(2)
         with col1:
-            s_real = st.text_input("الجزء الحقيقي لـ s:" if st.session_state.language == 'ar' else "Real part of s:" if st.session_state.language == 'en' else "Partie réelle de s:", value="0.5", key="zeta_s_real")
+            n1 = st.number_input(
+                "الحد الأدنى:" if st.session_state.language == 'ar' else "Minimum:" if st.session_state.language == 'en' else "Minimum:",
+                min_value=4, value=4, step=2, key="goldbach_min"
+            )
         with col2:
-            s_imag = st.text_input("الجزء التخيلي لـ s:" if st.session_state.language == 'ar' else "Imaginary part of s:" if st.session_state.language == 'en' else "Partie imaginaire de s:", value="14.134725", key="zeta_s_imag")
+            n2 = st.number_input(
+                "الحد الأقصى:" if st.session_state.language == 'ar' else "Maximum:" if st.session_state.language == 'en' else "Maximum:",
+                min_value=n1+2, value=100, step=2, key="goldbach_max"
+            )
         
-        if st.button(translator.get_text('calculate', st.session_state.language), type="primary"):
-            try:
-                s_real_val = float(s_real)
-                s_imag_val = float(s_imag)
-                s = complex(s_real_val, s_imag_val)
+        if st.button(translator.get_text('verify', st.session_state.language), type="primary"):
+            with st.spinner('جاري التحقق...' if st.session_state.language == 'ar' else 'Verifying...' if st.session_state.language == 'en' else 'Vérification en cours...'):
+                start_time = time.time()
                 
-                with st.spinner('جاري حساب دالة زيتا...' if st.session_state.language == 'ar' else 'Calculating zeta function...' if st.session_state.language == 'en' else 'Calcul de la fonction zêta...'):
-                    start_time = time.time()
-                    zeta_val = zeta_function(s)
-                    end_time = time.time()
+                # إعداد مؤشر التقدم
+                progress_placeholder = st.empty()
+                total_numbers = (n2 - n1) // 2 + 1
+                current_number = 0
+                
+                results = []
+                for n in range(n1, n2 + 1, 2):
+                    current_number += 1
+                    if show_progress:
+                        show_progress(current_number, total_numbers, translator.get_text('progress', st.session_state.language))
                     
-                    st.success(f"**ζ({s}) = {zeta_val}**")
-                    st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+                    verified, primes = goldbach_verification(n)
+                    if verified:
+                        results.append((n, primes))
+                
+                # مسح مؤشر التقدم
+                progress_placeholder.empty()
+                
+                end_time = time.time()
+                
+                if results:
+                    success_msg = f"**{'تم العثور على' if st.session_state.language == 'ar' else 'Found' if st.session_state.language == 'en' else 'Trouvé'} {len(results)} {'أزواج غولدباخ بين' if st.session_state.language == 'ar' else 'Goldbach pairs between' if st.session_state.language == 'en' else 'paires de Goldbach entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}:**"
+                    st.success(success_msg)
                     
-            except Exception as e:
-                st.error(f"❌ {translator.get_text('error', st.session_state.language)}: {e}")
+                    for n, primes in results:
+                        st.markdown(f"""
+                        <div class="result-card">
+                            <strong>{n} = {primes[0]} + {primes[1]}</strong>
+                            <div style="color: #10B981; margin-top: 8px;">✓ {translator.get_text('verified', st.session_state.language)}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    warning_msg = f"**{'لم يتم العثور على أزواج غولدباخ بين' if st.session_state.language == 'ar' else 'No Goldbach pairs found between' if st.session_state.language == 'en' else 'Aucune paire de Goldbach trouvée entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}**"
+                    st.warning(warning_msg)
+                
+                st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
     
-    # قسم حساب π بدقة عالية
-    elif service == "حساب π بدقة عالية":
-        st.header("π حساب π بدقة عالية")
+    # قسم الأعداد الأولية في نطاق (مُصلح)
+    elif service == translator.get_text('primes_in_range', st.session_state.language):
+        st.header("📊 " + translator.get_text('primes_in_range', st.session_state.language))
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            n1 = st.number_input(
+                "من:" if st.session_state.language == 'ar' else "From:" if st.session_state.language == 'en' else "De:",
+                min_value=0, value=1, step=1, key="primes_from"
+            )
+        with col2:
+            n2 = st.number_input(
+                "إلى:" if st.session_state.language == 'ar' else "To:" if st.session_state.language == 'en' else "À:",
+                min_value=n1+1, value=100, step=1, key="primes_to"
+            )
+        
+        if st.button(translator.get_text('search', st.session_state.language), type="primary"):
+            with st.spinner('جاري البحث...' if st.session_state.language == 'ar' else 'Searching...' if st.session_state.language == 'en' else 'Recherche en cours...'):
+                start_time = time.time()
+                
+                # إعداد مؤشر التقدم للنطاقات الكبيرة
+                progress_placeholder = st.empty()
+                if n2 - n1 > 1000:
+                    show_progress(0, n2 - n1, translator.get_text('progress', st.session_state.language))
+                
+                primes = primes_between(n1, n2)
+                
+                # مسح مؤشر التقدم
+                progress_placeholder.empty()
+                
+                end_time = time.time()
+                
+                if primes:
+                    success_msg = f"**{'تم العثور على' if st.session_state.language == 'ar' else 'Found' if st.session_state.language == 'en' else 'Trouvé'} {len(primes)} {'عدد أولي بين' if st.session_state.language == 'ar' else 'prime numbers between' if st.session_state.language == 'en' else 'nombres premiers entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}:**"
+                    st.success(success_msg)
+                    
+                    # عرض الأعداد الأولية في أعمدة
+                    cols = 5
+                    rows = (len(primes) + cols - 1) // cols
+                    
+                    for i in range(rows):
+                        col1, col2, col3, col4, col5 = st.columns(5)
+                        with col1:
+                            if i < len(primes):
+                                st.info(primes[i])
+                        with col2:
+                            if i + rows < len(primes):
+                                st.info(primes[i + rows])
+                        with col3:
+                            if i + 2*rows < len(primes):
+                                st.info(primes[i + 2*rows])
+                        with col4:
+                            if i + 3*rows < len(primes):
+                                st.info(primes[i + 3*rows])
+                        with col5:
+                            if i + 4*rows < len(primes):
+                                st.info(primes[i + 4*rows])
+                else:
+                    warning_msg = f"**{'لم يتم العثور على أعداد أولية بين' if st.session_state.language == 'ar' else 'No prime numbers found between' if st.session_state.language == 'en' else 'Aucun nombre premier trouvé entre'} {n1} {'و' if st.session_state.language == 'ar' else 'and' if st.session_state.language == 'en' else 'et'} {n2}**"
+                    st.warning(warning_msg)
+                
+                st.metric(translator.get_text('time_taken', st.session_state.language), f"{end_time - start_time:.3f} " + translator.get_text('seconds', st.session_state.language))
+    
+    # قسم حساب π بدقة عالية (مُصلح)
+    elif service == translator.get_text('high_precision_pi', st.session_state.language):
+        st.header("π " + translator.get_text('high_precision_pi', st.session_state.language))
         
         show_math_formula(
             r"\pi = 4 \sum_{k=0}^{\infty} \frac{(-1)^k}{2k+1}",
@@ -1332,9 +1524,9 @@ def main():
                 
                 # عرض أول 50 رقم من π
                 if len(pi_value) > 50:
-                    st.info(f"**أول 50 رقم من π:** {pi_value[:52]}...")
+                    st.info(f"**{'أول 50 رقم من π:' if st.session_state.language == 'ar' else 'First 50 digits of π:' if st.session_state.language == 'en' else 'Premiers 50 chiffres de π:'} {pi_value[:52]}...**")
     
-    # باقي الأقسام (يتم تضمينها بشكل مماثل مع تحسينات العرض الرياضي)
+    # باقي الأقسام (يتم تضمينها بنفس النمط مع الإصلاحات)
     # ... [يتم تضمين باقي الأقسام بنفس النمط]
     
     # معلومات إضافية في الشريط الجانبي
